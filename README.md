@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="custom_components/sentinel/brand/logo.png" alt="Sentinel" height="100%">
+  <img src="custom_components/sentinel/brand/icon.png" alt="Sentinel" height="100%">
 </p>
 
 # Sentinel for Home Assistant
