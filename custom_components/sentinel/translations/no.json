@@ -2,18 +2,22 @@
   "config": {
     "step": {
       "user": {
-        "title": "Sett opp K93 ANS",
-        "description": "K93 ANS sentraliserer varslingshåndtering: mottakere, kanaler og historikk konfigureres etterpå fra integrasjonens Konfigurer-innstillinger."
+        "title": "Sett opp Sentinel",
+        "description": "Sentinel sentraliserer varslingshåndtering: mottakere, kanaler og historikk konfigureres etterpå fra integrasjonens Konfigurer-innstillinger."
+      },
+      "import_legacy": {
+        "title": "Importer K93 ANS",
+        "description": "Et eksisterende K93 ANS-oppsett ble funnet. Sentinel tar det over: mottakere, kanaler, tidsplaner, chatterom, historikk og sensorentiteter beholdes. Datamappen kopieres til /config/sentinel (den gamle K93-Advanced-Notification-System-mappen beholdes som sikkerhetskopi), og de gamle k93_ans.*-tjenestene fungerer fortsatt inntil videre. Send inn for å fortsette."
       }
     },
     "abort": {
-      "already_configured": "K93 ANS er allerede konfigurert. Kun én instans støttes."
+      "already_configured": "Sentinel er allerede konfigurert. Kun én instans støttes."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "K93 ANS",
+        "title": "Sentinel",
         "menu_options": {
           "manage_recipients": "Administrer mottakere",
           "manage_channels": "Administrer kanaler",
@@ -41,6 +45,9 @@
           "linked_user_id": "Tilknyttet bruker",
           "min_importance": "Minimum viktighet",
           "allowed_channels": "Tillatte kanaler",
+          "quiet_start": "Stilletid start",
+          "quiet_end": "Stilletid slutt",
+          "quiet_min_importance": "Minimum viktighet i stilletid",
           "enabled": "Aktivert",
           "remove": "Fjern denne mottakeren"
         },
@@ -49,7 +56,9 @@
           "interactive_entity_id": "Valgfritt - en binary_sensor som er \"på\" mens denne mottakerens telefon er i bruk. Kreves for inaktivitetstidsavbruddet for direktevarsler under Avansert.",
           "linked_user_id": "Valgfritt - Home Assistant-brukeren denne mottakerens telefon tilhører. Kreves for at denne mottakeren skal motta et chatterom sin varsel-push for nye meldinger (se Administrer chatterom); har ingen effekt ellers.",
           "min_importance": "Standard minimum viktighet for denne mottakeren - kan overstyres per kanal, i feltene som vises nedenfor etter at et kanalvalg er lagret.",
-          "allowed_channels": "Tom = alle kanaler."
+          "allowed_channels": "Tom = alle kanaler.",
+          "quiet_start": "Valgfritt. Mellom start og slutt (lokal tid, kan gå over midnatt) når kun varsler med minst stilletidens viktighet frem til denne mottakeren.",
+          "quiet_min_importance": "Brukes kun i stilletid."
         }
       },
       "manage_channels": {
@@ -66,6 +75,7 @@
           "min_importance": "Minimum viktighet",
           "enabled": "Aktivert",
           "color": "Ikonfarge",
+          "labels": "Etiketter",
           "retention_days": "Overstyring av lagringstid for historikk (dager)",
           "max_records": "Overstyring av maks antall i historikk",
           "remove": "Fjern denne kanalen"
@@ -73,7 +83,8 @@
         "data_description": {
           "color": "En hvilken som helst CSS-farge (f.eks. #ff0000 eller red). Tom = temaets standard.",
           "retention_days": "Tom = bruk den globale \"Lagringstid for historikk\" under Avansert. Nyttig for en pratsom kanal du kun vil beholde en dag eller to, eller en viktig en du vil beholde i flere måneder.",
-          "max_records": "Tom = bruk det globale \"Maks antall i historikk\" under Avansert. Gjelder kun denne kanalens egne varsler - en pratsom kanals volum fortrenger ikke lenger en sjeldnere kanals historikk."
+          "max_records": "Tom = bruk det globale \"Maks antall i historikk\" under Avansert. Gjelder kun denne kanalens egne varsler - en pratsom kanals volum fortrenger ikke lenger en sjeldnere kanals historikk.",
+          "labels": "Underkanaler for å sortere denne kanalens varsler videre, f.eks. Inngangsdør eller Garasje. Skriv et navn for å legge til; send_notifications labels-felt bruker nøkkelen i små bokstaver (mellomrom blir _)."
         }
       },
       "manage_scheduled": {
@@ -93,6 +104,7 @@
           "message": "Melding",
           "icon": "Ikon",
           "channel": "Kanal",
+          "labels": "Etiketter",
           "importance": "Viktighet",
           "persistent": "Vedvarende",
           "home_only": "Kun hjemme",
@@ -104,7 +116,8 @@
           "icon": "Et mdi:-ikon, f.eks. mdi:pill. Tom = standard.",
           "persistent": "Hvis sann, kreves bekreftelse via det innebygde vedvarende varslingssystemet, samme som send_notifications eget \"persistent\"-felt.",
           "home_only": "Lever kun til mottakere hvis tilknyttede personentitet for øyeblikket er hjemme.",
-          "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere."
+          "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere.",
+          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler)."
         }
       },
       "manage_calendar": {
@@ -125,6 +138,7 @@
           "message": "Melding",
           "icon": "Ikon",
           "channel": "Kanal",
+          "labels": "Etiketter",
           "importance": "Viktighet",
           "persistent": "Vedvarende",
           "home_only": "Kun hjemme",
@@ -138,7 +152,8 @@
           "icon": "Et mdi:-ikon, f.eks. mdi:calendar. Tom = standard.",
           "persistent": "Hvis sann, kreves bekreftelse via det innebygde vedvarende varslingssystemet, samme som send_notifications eget \"persistent\"-felt.",
           "home_only": "Lever kun til mottakere hvis tilknyttede personentitet for øyeblikket er hjemme.",
-          "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere."
+          "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere.",
+          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler)."
         }
       },
       "manage_chatrooms": {
@@ -188,14 +203,25 @@
           "chat_reaction_emoji": "Emojiene som tilbys når man legger til en reaksjon på en chat-melding. Skriv inn en hvilken som helst emoji for å legge den til i listen. Å fjerne en her fjerner ikke reaksjoner som allerede bruker den - det påvirker kun hva som tilbys når man legger til en ny.",
           "language": "Brukt for utgående varslingstekst, f.eks. Bekreft-knappen.",
           "live_inactivity_timeout_minutes": "0 = deaktivert. For varsler sendt med interactive_only: true, fjerner en direktevarsel-push for en mottaker når deres interaktiv-sensor har vært \"av\" så lenge.",
-          "storage_path": "Tom = standard K93-Advanced-Notification-System-mappe. Absolutt, eller relativ til Home Assistants konfigurasjonsmappe; må være skrivbar for Home Assistant. database.db-filen inni den heter det uansett. Eksisterende historikk flyttes automatisk. Trer i kraft med én gang du lagrer."
+          "storage_path": "Tom = standard sentinel-mappe. Absolutt, eller relativ til Home Assistants konfigurasjonsmappe; må være skrivbar for Home Assistant. database.db-filen inni den heter det uansett. Eksisterende historikk flyttes automatisk. Trer i kraft med én gang du lagrer."
         }
       }
     },
     "error": {
       "duplicate_key": "En kanal med denne nøkkelen finnes allerede.",
       "invalid_cron": "Ikke et gyldig cron-uttrykk.",
-      "unknown": "Uventet feil ved lagring - sjekk Home Assistant-loggen for detaljer."
+      "unknown": "Uventet feil ved lagring - sjekk Home Assistant-loggen for detaljer.",
+      "invalid_key": "Nøkkelen kan ikke være tom."
+    }
+  },
+  "issues": {
+    "deprecated_service": {
+      "title": "Utdatert tjeneste {old}",
+      "description": "{old} er utdatert etter navnebyttet til Sentinel. Bruk {new} i automasjoner og skript i stedet; den gamle tjenesten fjernes i en fremtidig versjon."
+    },
+    "legacy_integration_folder": {
+      "title": "Fjern den gamle K93 ANS-integrasjonsmappen",
+      "description": "Sentinel har tatt over K93 ANS-konfigurasjonen. De gamle integrasjonsfilene ligger fortsatt i {path}. Slett mappen og start Home Assistant på nytt."
     }
   }
 }

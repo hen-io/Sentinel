@@ -1,0 +1,12 @@
+{
+  "domain": "sentinel",
+  "name": "Sentinel",
+  "codeowners": ["@hen-io"],
+  "config_flow": true,
+  "documentation": "https://github.com/hen-io/Sentinel",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/hen-io/Sentinel/issues",
+  "after_dependencies": ["mobile_app"],
+  "requirements": ["croniter>=1.4.0"],
+  "version": "1.1.0"
+}

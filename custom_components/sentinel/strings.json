@@ -2,18 +2,22 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up K93 ANS",
-        "description": "K93 ANS centralizes notification handling: recipients, channels and history are configured afterwards from the integration's Configure options."
+        "title": "Set up Sentinel",
+        "description": "Sentinel centralizes notification handling: recipients, channels and history are configured afterwards from the integration's Configure options."
+      },
+      "import_legacy": {
+        "title": "Import K93 ANS",
+        "description": "An existing K93 ANS setup was found. Sentinel takes it over: recipients, channels, schedules, chatrooms, history and sensor entities are kept. The data folder is copied to /config/sentinel (the old K93-Advanced-Notification-System folder stays as a backup) and the old k93_ans.* services keep working for now. Submit to continue."
       }
     },
     "abort": {
-      "already_configured": "K93 ANS is already configured. Only one instance is supported."
+      "already_configured": "Sentinel is already configured. Only one instance is supported."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "K93 ANS",
+        "title": "Sentinel",
         "menu_options": {
           "manage_recipients": "Manage recipients",
           "manage_channels": "Manage channels",
@@ -41,6 +45,9 @@
           "linked_user_id": "Linked user",
           "min_importance": "Minimum importance",
           "allowed_channels": "Allowed channels",
+          "quiet_start": "Quiet hours start",
+          "quiet_end": "Quiet hours end",
+          "quiet_min_importance": "Minimum importance during quiet hours",
           "enabled": "Enabled",
           "remove": "Remove this recipient"
         },
@@ -49,7 +56,9 @@
           "interactive_entity_id": "Optional - a binary_sensor that's \"on\" while this recipient's phone is in use. Required for the live notification inactivity timeout under Advanced.",
           "linked_user_id": "Optional - the Home Assistant login this recipient's phone belongs to. Required for this recipient to receive a chatroom's new-message-alert push (see Manage chatrooms); has no effect otherwise.",
           "min_importance": "Default minimum importance for this recipient - overridable per channel, in the fields that appear below after saving a channel selection.",
-          "allowed_channels": "Empty = all channels."
+          "allowed_channels": "Empty = all channels.",
+          "quiet_start": "Optional. Between start and end (local time, may cross midnight) only notifications at or above the quiet-hours importance reach this recipient.",
+          "quiet_min_importance": "Only used inside quiet hours."
         }
       },
       "manage_channels": {
@@ -66,6 +75,7 @@
           "min_importance": "Minimum importance",
           "enabled": "Enabled",
           "color": "Icon color",
+          "labels": "Labels",
           "retention_days": "History retention override (days)",
           "max_records": "History max records override",
           "remove": "Remove this channel"
@@ -73,7 +83,8 @@
         "data_description": {
           "color": "Any CSS color (e.g. #ff0000 or red). Blank = theme default.",
           "retention_days": "Blank = use the global \"History retention\" under Advanced. Useful for a noisy channel you only want kept a day or two, or an important one you want kept for months.",
-          "max_records": "Blank = use the global \"History max records\" under Advanced. Applies to this channel's own notifications only - a noisy channel's volume no longer crowds out a rarer channel's history."
+          "max_records": "Blank = use the global \"History max records\" under Advanced. Applies to this channel's own notifications only - a noisy channel's volume no longer crowds out a rarer channel's history.",
+          "labels": "Sub-channels to sort this channel's notifications further, e.g. Front door or Garage. Type a name to add one; send_notification's labels field takes the lowercase key (spaces become _)."
         }
       },
       "manage_scheduled": {
@@ -93,6 +104,7 @@
           "message": "Message",
           "icon": "Icon",
           "channel": "Channel",
+          "labels": "Labels",
           "importance": "Importance",
           "persistent": "Persistent",
           "home_only": "Home only",
@@ -104,7 +116,8 @@
           "icon": "An mdi: icon, e.g. mdi:pill. Blank = default.",
           "persistent": "If true, requires acknowledgement via the built-in persistent notification system, same as send_notification's own \"persistent\" field.",
           "home_only": "Only deliver to recipients whose assigned person entity is currently home.",
-          "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients."
+          "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients.",
+          "labels": "Labels to attach (defined per channel under Manage channels)."
         }
       },
       "manage_calendar": {
@@ -125,6 +138,7 @@
           "message": "Message",
           "icon": "Icon",
           "channel": "Channel",
+          "labels": "Labels",
           "importance": "Importance",
           "persistent": "Persistent",
           "home_only": "Home only",
@@ -138,7 +152,8 @@
           "icon": "An mdi: icon, e.g. mdi:calendar. Blank = default.",
           "persistent": "If true, requires acknowledgement via the built-in persistent notification system, same as send_notification's own \"persistent\" field.",
           "home_only": "Only deliver to recipients whose assigned person entity is currently home.",
-          "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients."
+          "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients.",
+          "labels": "Labels to attach (defined per channel under Manage channels)."
         }
       },
       "manage_chatrooms": {
@@ -188,14 +203,25 @@
           "chat_reaction_emoji": "The emoji offered when adding a reaction to a chat message. Type any emoji to add it to the list. Removing one here doesn't remove reactions already using it - it only affects what's offered when adding a new one.",
           "language": "Used for outgoing notification text, e.g. the Acknowledge action button.",
           "live_inactivity_timeout_minutes": "0 = disabled. For notifications sent with interactive_only: true, clears a live notification's push for a recipient once their interactive sensor has been \"off\" this long.",
-          "storage_path": "Blank = default K93-Advanced-Notification-System folder. Absolute, or relative to the Home Assistant config directory; must be writable by Home Assistant. The database.db file inside it is named that regardless. Existing history is migrated automatically. Takes effect as soon as you save."
+          "storage_path": "Blank = default sentinel folder. Absolute, or relative to the Home Assistant config directory; must be writable by Home Assistant. The database.db file inside it is named that regardless. Existing history is migrated automatically. Takes effect as soon as you save."
         }
       }
     },
     "error": {
       "duplicate_key": "A channel with this key already exists.",
       "invalid_cron": "Not a valid cron expression.",
-      "unknown": "Unexpected error saving - check the Home Assistant log for details."
+      "unknown": "Unexpected error saving - check the Home Assistant log for details.",
+      "invalid_key": "The key can't be empty."
+    }
+  },
+  "issues": {
+    "deprecated_service": {
+      "title": "Deprecated service {old}",
+      "description": "{old} is deprecated after the rename to Sentinel. Use {new} in your automations and scripts instead; the old service will be removed in a future release."
+    },
+    "legacy_integration_folder": {
+      "title": "Remove the old K93 ANS integration folder",
+      "description": "Sentinel has taken over the K93 ANS configuration. The old integration files are still in {path}. Delete that folder and restart Home Assistant."
     }
   }
 }

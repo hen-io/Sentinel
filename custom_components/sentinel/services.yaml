@@ -1,9 +1,11 @@
 send_notification:
   name: Send notification
   description: >-
-    Sends a notification through K93 ANS. It is fanned out to configured
+    Sends a notification through Sentinel. It is fanned out to configured
     recipients and channels according to their filters, and optionally
     created as a persistent notification requiring acknowledgement.
+    Returns the notification id (and the recipients it was pushed to) when
+    called with a response variable.
   fields:
     title:
       name: Title
@@ -47,11 +49,11 @@ send_notification:
       description: >-
         A camera or image entity to snapshot for the picture instead of
         supplying "image" directly. Saved under
-        /config/www/K93-Advanced-Notification-System/<channel>/, uniquely
+        /config/www/sentinel/notifications/<channel>/, uniquely
         named per capture, and served back as an "image" path automatically.
         Ignored if "image" is also given - an explicit "image" always wins.
         Old captures are cleaned up automatically once no stored notification
-        references them anymore (see the integration README).
+        references them anymore.
       required: false
       example: "camera.front_door"
       selector:
@@ -63,13 +65,25 @@ send_notification:
       name: Channel
       description: >-
         Configured channel key, or a list of them. Built-in channels are
-        info, alert, event, reminder, security and system. When several are
+        info, alert, event, reminder, security, system and chat. When several are
         given, a recipient receives the notification if it's subscribed to
         any one of them; the first channel is used for anything that can
         only carry one value (Android's notification channel, the card's
         icon color). Defaults to "default".
       required: false
       example: '["security", "event"]'
+      selector:
+        text:
+          multiple: true
+    labels:
+      name: Labels
+      description: >-
+        Optional label key, or a list of them, to sort the notification
+        further inside its channel (a "sub-channel"). Labels are defined per
+        channel under Manage channels; cards can filter on them. Unknown
+        labels are kept as-is.
+      required: false
+      example: '["front_door", "motion"]'
       selector:
         text:
           multiple: true
@@ -188,7 +202,7 @@ send_notification:
       name: Clear on acknowledge
       description: >-
         If true (default), acknowledging this notification - from the card,
-        the k93_ans.acknowledge service, or the phone's own Acknowledge
+        the sentinel.acknowledge service, or the phone's own Acknowledge
         button - also clears the pushed notification on every companion-app
         recipient it reached. Set to false to leave the phone notification
         in place even after it's been acknowledged elsewhere.
@@ -265,10 +279,10 @@ restore_config_from_snapshot:
   description: >-
     Replaces the ENTIRE current configuration (recipients, channels,
     scheduled and calendar notifications, Advanced settings) with the
-    contents of config.json - the backup snapshot K93 ANS writes
+    contents of config.json - the backup snapshot Sentinel writes
     automatically alongside database.db on every Configure save. Intended
     for recovery if the config entry itself is ever lost or corrupted, not
-    routine use. The integration reloads immediately afterward, same as
+    routine use. Admin only. The integration reloads immediately afterward, same as
     saving through Configure would.
   fields:
     confirm:
@@ -287,14 +301,15 @@ send_chat_message:
   description: >-
     Posts a message into a chatroom (see Manage chatrooms). Meant for
     automations/scripts, not real user-to-user chat - that's what the
-    k93-ans-chat-card's own composer is for. Setting sender_name and/or
+    sentinel-chat-card's own composer is for. Setting sender_name and/or
     sender_icon posts as that System/bot-style identity regardless of who
     or what triggered the call - including a manual test from Developer
     Tools. Leave both blank to instead attribute the message to whichever
     real Home Assistant user triggered the call (e.g. a script you ran
     yourself), the same as one sent from the card; falls back to a plain
     "System" identity if the call has no real user behind it either (e.g.
-    a purely time/state-triggered automation).
+    a purely time/state-triggered automation). Non-admin users can only post to
+    chatrooms they have access to.
   fields:
     chatroom_id:
       name: Chatroom

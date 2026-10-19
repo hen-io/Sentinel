@@ -25,6 +25,7 @@ class NotificationRecord(TypedDict):
     image_managed: bool
     channel: str
     channels: list[str]
+    labels: list[str]
     importance: str
     actions: list[dict[str, str]]
     persistent: bool
@@ -56,6 +57,15 @@ class Recipient(TypedDict):
     person_entity_id: str | None
     interactive_entity_id: str | None
     linked_user_id: str | None
+    quiet_start: str | None
+    quiet_end: str | None
+    quiet_min_importance: str
+
+
+class Label(TypedDict):
+
+    key: str
+    name: str
 
 
 class Channel(TypedDict):
@@ -68,6 +78,7 @@ class Channel(TypedDict):
     color: str | None
     retention_days: int | None
     max_records: int | None
+    labels: list[Label]
 
 
 class ChatRoom(TypedDict):
@@ -107,6 +118,7 @@ class ScheduledNotification(TypedDict):
     message: str
     icon: str | None
     channel: str
+    labels: list[str]
     importance: str
     persistent: bool
     home_only: bool

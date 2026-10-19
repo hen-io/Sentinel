@@ -1,6 +1,6 @@
 {
-  "name": "K93 ANS",
-  "domains": ["k93_ans"],
+  "name": "Sentinel",
+  "domains": ["sentinel"],
   "homeassistant": "2026.6.0",
   "render_readme": true
 }
