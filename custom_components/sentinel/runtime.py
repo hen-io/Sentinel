@@ -25,6 +25,7 @@ class SentinelData:
     store: NotificationStore
     chat_store: ChatStore
     user_names: dict[str, str] = field(default_factory=dict)
+    cache: dict[str, Any] = field(default_factory=dict)
     live_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
     @property

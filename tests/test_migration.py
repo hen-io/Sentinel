@@ -102,3 +102,18 @@ async def test_fresh_install_without_legacy(hass: HomeAssistant, isolated_config
     await hass.async_block_till_done()
     assert (isolated_config_dir / "sentinel" / "database.db").is_file()
     assert not (isolated_config_dir / LEGACY_STORAGE_DIR_NAME).exists()
+
+
+async def test_storage_failure_keeps_k93_ans(hass: HomeAssistant, isolated_config_dir):
+    from unittest.mock import patch
+
+    from homeassistant.config_entries import ConfigEntryState
+
+    legacy_entry = MockConfigEntry(domain=LEGACY_DOMAIN, unique_id=LEGACY_DOMAIN, options=make_options())
+    legacy_entry.add_to_hass(hass)
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, options=make_options())
+    entry.add_to_hass(hass)
+    with patch("custom_components.sentinel.Database.open", side_effect=OSError("disk full")):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    assert hass.config_entries.async_entries(LEGACY_DOMAIN), "old entry is kept until Sentinel takes over"

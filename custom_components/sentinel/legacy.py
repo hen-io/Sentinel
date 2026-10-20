@@ -53,14 +53,26 @@ def legacy_options_for_import(hass: HomeAssistant, legacy_entry: ConfigEntry) ->
     return options
 
 
+async def async_unload_legacy_entries(hass: HomeAssistant) -> list[str]:
+    """Unload running K93 ANS entries so their data can't change while it's copied."""
+    unloaded = []
+    for legacy in legacy_entries(hass):
+        if legacy.state is ConfigEntryState.LOADED and await hass.config_entries.async_unload(legacy.entry_id):
+            unloaded.append(legacy.entry_id)
+    return unloaded
+
+
+async def async_restore_legacy_entries(hass: HomeAssistant, entry_ids: list[str]) -> None:
+    """Start K93 ANS again when Sentinel couldn't take over."""
+    for entry_id in entry_ids:
+        await hass.config_entries.async_setup(entry_id)
+
+
 async def async_adopt_legacy_entries(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Unload old K93 ANS entries, move their entities/device to this entry, then remove them."""
+    """Move unloaded K93 ANS entries' entities/device to this entry, then remove them."""
     ent_reg = er.async_get(hass)
     dev_reg = dr.async_get(hass)
     for legacy in legacy_entries(hass):
-        if legacy.state is ConfigEntryState.LOADED:
-            await hass.config_entries.async_unload(legacy.entry_id)
-
         prefix = f"{legacy.entry_id}_"
         for reg_entry in er.async_entries_for_config_entry(ent_reg, legacy.entry_id):
             new_unique_id = f"{entry.entry_id}_{reg_entry.unique_id.removeprefix(prefix)}"

@@ -292,9 +292,8 @@ def async_restore_persistent_notifications(hass: HomeAssistant, runtime: Sentine
 
 async def async_end_live_notifications(hass: HomeAssistant, runtime: SentinelData) -> None:
     """End live notifications left over from before a restart (chat alerts excluded)."""
-    for record in list(runtime.store.async_list(include_acknowledged=False)):
-        live_id = record.get("live_id")
-        if live_id and not live_id.startswith(CHAT_ALERT_LIVE_ID_PREFIX):
+    for record in runtime.store.async_active_live():
+        if not record["live_id"].startswith(CHAT_ALERT_LIVE_ID_PREFIX):
             await async_acknowledge(hass, runtime, record["id"], "restart")
 
 
@@ -307,6 +306,9 @@ async def _send_clear_notification(hass: HomeAssistant, notify_service: str, rec
                 {"message": "clear_notification", "data": {"tag": record_id}},
                 blocking=True,
             )
+            return
+        except ServiceNotFound:
+            _LOGGER.warning("Sentinel can't clear push on notify.%s: service no longer exists", notify_service)
             return
         except Exception:
             if attempt == 1:
@@ -330,8 +332,8 @@ async def async_clear_inactive_live_recipients(hass: HomeAssistant, runtime: Sen
     if timeout is None:
         return
     recipients = {r["id"]: r for r in runtime.options.get(CONF_RECIPIENTS, [])}
-    for record in runtime.store.async_list(include_acknowledged=False):
-        if not record.get("live_id") or not record.get("interactive_only"):
+    for record in runtime.store.async_active_live():
+        if not record.get("interactive_only"):
             continue
         changed = False
         for recipient_id, delivery in (record.get("recipients") or {}).items():
@@ -352,6 +354,10 @@ async def async_clear_inactive_live_recipients(hass: HomeAssistant, runtime: Sen
 async def async_acknowledge(
     hass: HomeAssistant, runtime: SentinelData, notification_id: str, via: str
 ) -> NotificationRecord | None:
+    """Acknowledge once; repeated calls return the record without side effects."""
+    existing = runtime.store.async_get(notification_id)
+    if existing is None or existing["acknowledged"]:
+        return existing
     record = await runtime.store.async_acknowledge(notification_id, via)
     if record is None:
         return None

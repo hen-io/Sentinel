@@ -16,24 +16,42 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_time_change
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_CHANNELS, CONF_CHATROOMS, CONF_RECIPIENTS, DOMAIN, NAME, SIGNAL_DELETED, SIGNAL_UPDATED
 from .runtime import SentinelConfigEntry, SentinelData
 
 
-def _local_dates(runtime: SentinelData) -> list[date]:
-    return [
+def _stats(runtime: SentinelData) -> dict[str, int]:
+    """History counters, computed once per store change (and day)."""
+    today = dt_util.now().date()
+    key = (runtime.store.revision, today)
+    cached = runtime.cache.get("stats")
+    if cached and cached[0] == key:
+        return cached[1]
+    dates = [
         dt_util.as_local(created).date()
         for r in runtime.store.async_list()
         if r.get("show_in_history", True) and (created := dt_util.parse_datetime(r["created"]))
     ]
 
+    def since(first: date) -> int:
+        return sum(1 for d in dates if d >= first)
 
-def _sent_since(runtime: SentinelData, start: Callable[[date], date]) -> int:
-    today = dt_util.now().date()
-    first = start(today)
-    return sum(1 for d in _local_dates(runtime) if d >= first)
+    stats = {
+        "stored": len(dates),
+        "sent_today": since(today),
+        "sent_this_week": since(today - timedelta(days=today.weekday())),
+        "sent_this_month": since(today.replace(day=1)),
+        "unacknowledged": len(runtime.store.async_list(outstanding_only=True)),
+    }
+    runtime.cache["stats"] = (key, stats)
+    return stats
+
+
+def _stat(key: str) -> Callable[[SentinelData], int]:
+    return lambda runtime: _stats(runtime)[key]
 
 
 def _channels_attrs(runtime: SentinelData) -> dict[str, Any]:
@@ -82,6 +100,8 @@ class SentinelSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[SentinelData], int]
     attrs_fn: Callable[[SentinelData], dict[str, Any]] | None = None
+    # Follows notification changes; config-based sensors only change on reload.
+    live: bool = True
 
 
 SENSORS: tuple[SentinelSensorDescription, ...] = (
@@ -90,6 +110,7 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
         name="Configured channels",
         icon="mdi:tune-vertical",
         value_fn=lambda rt: len(rt.options.get(CONF_CHANNELS, [])),
+        live=False,
         attrs_fn=_channels_attrs,
     ),
     SentinelSensorDescription(
@@ -97,6 +118,7 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
         name="Configured recipients",
         icon="mdi:account-multiple",
         value_fn=lambda rt: len(rt.options.get(CONF_RECIPIENTS, [])),
+        live=False,
         attrs_fn=_recipients_attrs,
     ),
     SentinelSensorDescription(
@@ -104,37 +126,38 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
         name="Configured chatrooms",
         icon="mdi:forum",
         value_fn=lambda rt: len(rt.options.get(CONF_CHATROOMS, [])),
+        live=False,
         attrs_fn=_chatrooms_attrs,
     ),
     SentinelSensorDescription(
         key="stored",
         name="Notifications stored",
         icon="mdi:database",
-        value_fn=lambda rt: len(_local_dates(rt)),
+        value_fn=_stat("stored"),
     ),
     SentinelSensorDescription(
         key="sent_today",
         name="Sent today",
         icon="mdi:calendar-today",
-        value_fn=lambda rt: _sent_since(rt, lambda today: today),
+        value_fn=_stat("sent_today"),
     ),
     SentinelSensorDescription(
         key="sent_this_week",
         name="Sent this week",
         icon="mdi:calendar-week",
-        value_fn=lambda rt: _sent_since(rt, lambda today: today - timedelta(days=today.weekday())),
+        value_fn=_stat("sent_this_week"),
     ),
     SentinelSensorDescription(
         key="sent_this_month",
         name="Sent this month",
         icon="mdi:calendar-month",
-        value_fn=lambda rt: _sent_since(rt, lambda today: today.replace(day=1)),
+        value_fn=_stat("sent_this_month"),
     ),
     SentinelSensorDescription(
         key="unacknowledged",
         name="Unacknowledged notifications",
         icon="mdi:bell-alert",
-        value_fn=lambda rt: len(rt.store.async_list(outstanding_only=True)),
+        value_fn=_stat("unacknowledged"),
     ),
 )
 
@@ -168,13 +191,13 @@ class SentinelSensorBase(SensorEntity):
             entry_type=DeviceEntryType.SERVICE,
         )
 
-    async def async_added_to_hass(self) -> None:
-        @callback
-        def _on_change(*_args: Any) -> None:
-            self.async_schedule_update_ha_state(True)
+    @callback
+    def _on_change(self, *_args: Any) -> None:
+        self.async_write_ha_state()
 
-        self.async_on_remove(async_dispatcher_connect(self.hass, SIGNAL_UPDATED, _on_change))
-        self.async_on_remove(async_dispatcher_connect(self.hass, SIGNAL_DELETED, _on_change))
+    def _follow_notifications(self) -> None:
+        for signal in (SIGNAL_UPDATED, SIGNAL_DELETED):
+            self.async_on_remove(async_dispatcher_connect(self.hass, signal, self._on_change))
 
 
 class SentinelSensor(SentinelSensorBase):
@@ -184,6 +207,12 @@ class SentinelSensor(SentinelSensorBase):
     def __init__(self, entry: SentinelConfigEntry, description: SentinelSensorDescription) -> None:
         super().__init__(entry, description.key)
         self.entity_description = description
+
+    async def async_added_to_hass(self) -> None:
+        if self.entity_description.live:
+            self._follow_notifications()
+            # Day-based counters roll over at midnight.
+            self.async_on_remove(async_track_time_change(self.hass, self._on_change, hour=0, minute=0, second=0))
 
     @property
     def native_value(self) -> int:
@@ -209,7 +238,11 @@ class SentinelDatabaseSizeSensor(SentinelSensorBase):
     async def async_update(self) -> None:
         self._attr_native_value = await self.hass.async_add_executor_job(self._runtime.db.size_bytes)
 
+    @callback
+    def _on_change(self, *_args: Any) -> None:
+        self.async_schedule_update_ha_state(True)
+
     async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
+        self._follow_notifications()
         await self.async_update()
         self.async_write_ha_state()

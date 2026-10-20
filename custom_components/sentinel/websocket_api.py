@@ -16,6 +16,17 @@ from .ws import ws_command
 
 Connection = websocket_api.ActiveConnection
 
+# Record fields sent to cards (delivery details and push payload data stay server-side).
+PUBLIC_FIELDS = (
+    "id", "created", "updated_at", "live_id", "title", "message", "icon", "image", "channel", "channels",
+    "labels", "importance", "persistent", "requires_ack", "acknowledged", "acknowledged_at", "source",
+    "show_in_history",
+)
+
+
+def public_record(record: dict[str, Any]) -> dict[str, Any]:
+    return {key: record.get(key) for key in PUBLIC_FIELDS}
+
 
 def config_payload(options: dict[str, Any]) -> dict[str, Any]:
     """Public channel/label config for the cards."""
@@ -45,6 +56,7 @@ def config_payload(options: dict[str, Any]) -> dict[str, Any]:
         vol.Optional("min_importance"): vol.In(IMPORTANCE_LEVELS),
         vol.Optional("labels"): [str],
         vol.Optional("outstanding_only", default=False): bool,
+        vol.Optional("before"): str,
     },
 )
 def _list(hass: HomeAssistant, connection: Connection, msg: dict, runtime: SentinelData) -> None:
@@ -56,8 +68,9 @@ def _list(hass: HomeAssistant, connection: Connection, msg: dict, runtime: Senti
         min_importance=msg.get("min_importance"),
         labels=msg.get("labels"),
         outstanding_only=msg["outstanding_only"],
+        before=msg.get("before"),
     )
-    connection.send_result(msg["id"], {"notifications": records})
+    connection.send_result(msg["id"], {"notifications": [public_record(r) for r in records]})
 
 
 @ws_command("config")
@@ -69,7 +82,7 @@ def _config(hass: HomeAssistant, connection: Connection, msg: dict, runtime: Sen
 def _subscribe(hass: HomeAssistant, connection: Connection, msg: dict, runtime: SentinelData) -> None:
     @callback
     def forward_updated(record: dict) -> None:
-        connection.send_message(websocket_api.event_message(msg["id"], {"notification": record}))
+        connection.send_message(websocket_api.event_message(msg["id"], {"notification": public_record(record)}))
 
     @callback
     def forward_deleted(deleted_ids: list[str]) -> None:
@@ -100,7 +113,7 @@ async def _acknowledge(hass: HomeAssistant, connection: Connection, msg: dict, r
     if record is None:
         connection.send_error(msg["id"], "not_found", "Notification not found")
         return
-    connection.send_result(msg["id"], {"notification": record})
+    connection.send_result(msg["id"], {"notification": public_record(record)})
 
 
 @ws_command("delete", {vol.Required("notification_ids"): [str]})

@@ -56,13 +56,19 @@ SCHEMA = (
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_sentinel_chat_reactions_message ON chat_reactions(message_id)",
-    "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)",
-    # Pre-rename index names.
+    # Leftovers from earlier versions.
+    "DROP TABLE IF EXISTS meta",
     *(
         f"DROP INDEX IF EXISTS idx_k93_{name}"
         for name in ("created", "live_id", "channel", "chat_chatroom_created", "chat_reactions_message")
     ),
 )
+
+
+# Schema version stored in PRAGMA user_version. To change the schema: bump SCHEMA_VERSION
+# and add MIGRATIONS[new_version] = (statements...) upgrading from the previous version.
+SCHEMA_VERSION = 1
+MIGRATIONS: dict[int, tuple[str, ...]] = {}
 
 
 class Database:
@@ -80,10 +86,20 @@ class Database:
         self.created = not self.path.exists()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.path, check_same_thread=False)
-        with self._lock:
+        try:
             for statement in SCHEMA:
                 conn.execute(statement)
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            for target in range(version + 1, SCHEMA_VERSION + 1):
+                for statement in MIGRATIONS.get(target, ()):
+                    conn.execute(statement)
+            if version < SCHEMA_VERSION:
+                conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.commit()
+        except sqlite3.Error:
+            conn.close()
+            raise
+        with self._lock:
             self._conn = conn
 
     def close(self) -> None:

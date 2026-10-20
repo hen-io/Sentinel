@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import timedelta
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
+from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.typing import ConfigType
 
 from . import chat_websocket_api, legacy, migration, websocket_api  # noqa: F401 (registers ws commands)
@@ -88,19 +91,24 @@ async def _async_open_storage(hass: HomeAssistant, entry: SentinelConfigEntry) -
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> bool:
-    await legacy.async_adopt_legacy_entries(hass, entry)  # legacy
+    unloaded_legacy = await legacy.async_unload_legacy_entries(hass)  # legacy
 
     options = normalize_options(entry.options)
     if options != dict(entry.options):
         hass.config_entries.async_update_entry(entry, options=options)
 
-    runtime = await _async_open_storage(hass, entry)
+    try:
+        runtime = await _async_open_storage(hass, entry)
+    except (OSError, sqlite3.Error) as err:
+        await legacy.async_restore_legacy_entries(hass, unloaded_legacy)  # legacy
+        raise ConfigEntryNotReady(f"Sentinel storage is unavailable: {err}") from err
+    await legacy.async_adopt_legacy_entries(hass, entry)  # legacy
     entry.runtime_data = runtime
     entry.async_on_unload(runtime.db.async_close)
     await _async_refresh_user_names(hass, runtime)
     await async_write_config_snapshot(hass, runtime.storage_dir, entry.options)
 
-    async def _on_started(_event: Event | None = None) -> None:
+    async def _on_started(_hass: HomeAssistant) -> None:
         await async_end_live_notifications(hass, runtime)
         async_restore_persistent_notifications(hass, runtime)
         await _async_prune(hass, runtime)
@@ -109,7 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> 
         # Added or reloaded: live notifications are still live, keep them.
         async_restore_persistent_notifications(hass, runtime)
     else:
-        entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_started))
+        entry.async_on_unload(async_at_started(hass, _on_started))
 
     ack_prefixes = (ACK_ACTION_PREFIX, *legacy.ack_action_prefixes())  # legacy
 

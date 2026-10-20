@@ -40,6 +40,8 @@ class NotificationStore:
         self._db = db
         self._notifications: list[NotificationRecord] = []
         self._by_id: dict[str, NotificationRecord] = {}
+        # Bumped on every change; lets readers cache derived data.
+        self.revision = 0
 
     async def async_load(self) -> None:
         rows = await self._db.async_query(
@@ -52,6 +54,7 @@ class NotificationStore:
             record.setdefault("labels", [])
         self._notifications = sorted(records, key=lambda r: r["created"], reverse=True)
         self._by_id = {r["id"]: r for r in self._notifications}
+        self.revision += 1
 
     def _insert_sorted(self, record: NotificationRecord) -> None:
         created = record["created"]
@@ -68,7 +71,7 @@ class NotificationStore:
             self._notifications.remove(previous)
         self._insert_sorted(record)
         self._by_id[record["id"]] = record
-        await self._db.async_execute(_UPSERT_SQL, _row(record))
+        await self.async_update_record(record)
 
     async def async_add_many(self, records: list[NotificationRecord]) -> None:
         merged = {r["id"]: r for r in self._notifications}
@@ -78,6 +81,8 @@ class NotificationStore:
         await self._db.async_executemany(_UPSERT_SQL, [_row(r) for r in records])
 
     async def async_update_record(self, record: NotificationRecord) -> None:
+        """Persist a record changed in place."""
+        self.revision += 1
         await self._db.async_execute(_UPSERT_SQL, _row(record))
 
     def async_get(self, notification_id: str) -> NotificationRecord | None:
@@ -89,6 +94,9 @@ class NotificationStore:
                 return record
         return None
 
+    def async_active_live(self) -> list[NotificationRecord]:
+        return [r for r in self._notifications if r.get("live_id") and not r["acknowledged"]]
+
     def async_list(
         self,
         include_acknowledged: bool = True,
@@ -98,8 +106,12 @@ class NotificationStore:
         min_importance: str | None = None,
         labels: list[str] | None = None,
         outstanding_only: bool = False,
+        before: str | None = None,
     ) -> list[NotificationRecord]:
+        """Newest first; `before` (ISO created) pages to older records."""
         records: Any = self._notifications
+        if before:
+            records = (r for r in records if r["created"] < before)
         if outstanding_only:
             records = (r for r in records if r.get("requires_ack") and not r["acknowledged"])
         elif not include_acknowledged:
@@ -138,6 +150,7 @@ class NotificationStore:
             self._notifications = [r for r in self._notifications if r["id"] not in gone]
             for notification_id in deleted:
                 del self._by_id[notification_id]
+            self.revision += 1
             await self._db.async_executemany(
                 "DELETE FROM notifications WHERE id = ?", [(i,) for i in deleted]
             )

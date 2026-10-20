@@ -99,3 +99,36 @@ async def test_restore_config_is_admin_only(hass: HomeAssistant, loaded_entry, h
             blocking=True,
             context=Context(user_id=hass_read_only_user.id),
         )
+
+
+async def test_acknowledge_is_idempotent(hass: HomeAssistant, loaded_entry):
+    response = await _send(hass, persistent=True)
+    await hass.services.async_call(DOMAIN, "acknowledge", {"notification_id": response["id"]}, blocking=True)
+    record = loaded_entry.runtime_data.store.async_get(response["id"])
+    first_at = record["acknowledged_at"]
+    await hass.services.async_call(DOMAIN, "acknowledge", {"notification_id": response["id"]}, blocking=True)
+    assert record["acknowledged_at"] == first_at
+    assert record["acknowledged_via"] == "service"
+
+
+async def test_websocket_paging_and_public_fields(hass: HomeAssistant, loaded_entry, hass_ws_client):
+    for index in range(5):
+        await _send(hass, message=str(index))
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/list", "limit": 2})
+    first = (await client.receive_json())["result"]["notifications"]
+    assert [r["message"] for r in first] == ["4", "3"]
+    assert "recipients" not in first[0] and "data" not in first[0]
+
+    await client.send_json_auto_id({"type": f"{DOMAIN}/list", "limit": 2, "before": first[-1]["created"]})
+    second = (await client.receive_json())["result"]["notifications"]
+    assert [r["message"] for r in second] == ["2", "1"]
+
+
+async def test_sensor_counters(hass: HomeAssistant, loaded_entry):
+    await _send(hass)
+    await _send(hass, persistent=True)
+    await hass.async_block_till_done()
+    states = {s.entity_id: s.state for s in hass.states.async_all("sensor")}
+    assert states["sensor.sentinel_sent_today"] == "2"
+    assert states["sensor.sentinel_unacknowledged_notifications"] == "1"
