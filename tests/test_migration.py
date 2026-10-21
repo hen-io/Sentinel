@@ -90,8 +90,8 @@ async def test_import_from_k93_ans(hass: HomeAssistant, isolated_config_dir, not
     assert record["image"] == "/local/sentinel/notifications/security/n1_1.jpg"
     assert (isolated_config_dir / "www" / "sentinel" / "notifications" / "security" / "n1_1.jpg").is_file()
 
-    # Old service names keep working after the import.
-    assert hass.services.has_service(LEGACY_DOMAIN, "send_notification")
+    # Old k93_ans.* service names are no longer provided.
+    assert not hass.services.has_service(LEGACY_DOMAIN, "send_notification")
 
 
 async def test_fresh_install_without_legacy(hass: HomeAssistant, isolated_config_dir):

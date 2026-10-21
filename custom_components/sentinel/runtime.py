@@ -14,6 +14,7 @@ from homeassistant.exceptions import ServiceValidationError
 from .chat_store import ChatStore
 from .const import DOMAIN
 from .database import Database
+from .reminders import ReminderManager
 from .store import NotificationStore
 
 
@@ -27,6 +28,7 @@ class SentinelData:
     user_names: dict[str, str] = field(default_factory=dict)
     cache: dict[str, Any] = field(default_factory=dict)
     live_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    reminders: ReminderManager | None = None
 
     @property
     def options(self) -> dict[str, Any]:

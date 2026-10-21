@@ -48,6 +48,8 @@ SEND_NOTIFICATION_SCHEMA = vol.Schema(
         vol.Optional("show_in_history", default=True): cv.boolean,
         vol.Optional("dismiss_on_action", default=False): cv.boolean,
         vol.Optional("clear_on_acknowledge", default=True): cv.boolean,
+        vol.Optional("repeat_minutes"): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        vol.Optional("repeat_count"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
     }
 )
 
@@ -166,15 +168,8 @@ SERVICES: tuple[ServiceSpec, ...] = (
 )
 
 
-def async_register_service(
-    hass: HomeAssistant,
-    domain: str,
-    spec: ServiceSpec,
-    on_call: Callable[[ServiceCall], None] | None = None,
-) -> None:
+def async_register_service(hass: HomeAssistant, domain: str, spec: ServiceSpec) -> None:
     async def _handle(call: ServiceCall) -> ServiceResponse:
-        if on_call is not None:
-            on_call(call)
         return await spec.handler(hass, require_runtime(hass), call)
 
     if spec.admin:

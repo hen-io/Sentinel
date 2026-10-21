@@ -11,6 +11,7 @@ SIGNAL_CONFIG_UPDATED = f"{DOMAIN}_config_updated"
 SIGNAL_CHAT_MESSAGE = f"{DOMAIN}_chat_message"
 SIGNAL_CHAT_READ = f"{DOMAIN}_chat_read"
 SIGNAL_CHAT_REACTION = f"{DOMAIN}_chat_reaction"
+SIGNAL_CHAT_DELETED = f"{DOMAIN}_chat_deleted"
 CHAT_ALERT_LIVE_ID_PREFIX = "chat_"
 
 DEFAULT_CHANNEL = "default"
@@ -76,5 +77,9 @@ CHAT_IMAGES_SUBDIR = "chat"
 
 SUPPORTED_LANGUAGES = ["en", "no"]
 ACK_ACTION_LABELS = {"en": "Acknowledge", "no": "Bekreft"}
+TEST_MESSAGES = {
+    "en": ("Sentinel test", "Test notification for {name}. Delivery works!"),
+    "no": ("Sentinel-test", "Testvarsel for {name}. Leveringen fungerer!"),
+}
 
 CHAT_MESSAGE_MAX_LENGTH = 4000

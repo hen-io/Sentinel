@@ -7,7 +7,7 @@
       },
       "import_legacy": {
         "title": "Import K93 ANS",
-        "description": "An existing K93 ANS setup was found. Sentinel takes it over: recipients, channels, schedules, chatrooms, history and sensor entities are kept. The data folder is copied to /config/sentinel (the old K93-Advanced-Notification-System folder stays as a backup) and the old k93_ans.* services keep working for now. Submit to continue."
+        "description": "An existing K93 ANS setup was found. Sentinel takes it over: recipients, channels, schedules, chatrooms, history and sensor entities are kept. The data folder is copied to /config/sentinel (the old K93-Advanced-Notification-System folder stays as a backup). Update automations and scripts from k93_ans.* to sentinel.* services. Submit to continue."
       }
     },
     "abort": {
@@ -18,6 +18,7 @@
     "step": {
       "init": {
         "title": "Sentinel",
+        "description": "Recipients: {recipient} · Channels: {channel} · Scheduled: {scheduled} · Calendar: {calendar} · Chatrooms: {chatroom}",
         "menu_options": {
           "manage_recipients": "Manage recipients",
           "manage_channels": "Manage channels",
@@ -36,7 +37,6 @@
       },
       "edit_recipient": {
         "title": "Recipient",
-        "description": "Saving after adding a channel to \"Allowed channels\" reopens this form with an extra \"Importance for\" field for it, letting you override the minimum importance for just that channel.",
         "data": {
           "name": "Name",
           "notify_service": "Notify service",
@@ -45,20 +45,24 @@
           "linked_user_id": "Linked user",
           "min_importance": "Minimum importance",
           "allowed_channels": "Allowed channels",
+          "channel_importance": "Per-channel minimum importance",
           "quiet_start": "Quiet hours start",
           "quiet_end": "Quiet hours end",
           "quiet_min_importance": "Minimum importance during quiet hours",
           "enabled": "Enabled",
+          "send_test": "Send a test notification after saving",
           "remove": "Remove this recipient"
         },
         "data_description": {
           "person_entity_id": "Optional - only meaningful when a notification sets \"home only\"; required for that filter to affect this recipient at all.",
           "interactive_entity_id": "Optional - a binary_sensor that's \"on\" while this recipient's phone is in use. Required for the live notification inactivity timeout under Advanced.",
           "linked_user_id": "Optional - the Home Assistant login this recipient's phone belongs to. Required for this recipient to receive a chatroom's new-message-alert push (see Manage chatrooms); has no effect otherwise.",
-          "min_importance": "Default minimum importance for this recipient - overridable per channel, in the fields that appear below after saving a channel selection.",
+          "min_importance": "Default minimum importance for this recipient.",
           "allowed_channels": "Empty = all channels.",
           "quiet_start": "Optional. Between start and end (local time, may cross midnight) only notifications at or above the quiet-hours importance reach this recipient.",
-          "quiet_min_importance": "Only used inside quiet hours."
+          "quiet_min_importance": "Only used inside quiet hours.",
+          "channel_importance": "Optional overrides of the minimum importance for single channels, e.g. Security: Low to always get security notifications.",
+          "send_test": "Sends a short test push to this recipient's notify service right after saving."
         }
       },
       "manage_channels": {
@@ -107,6 +111,8 @@
           "labels": "Labels",
           "importance": "Importance",
           "persistent": "Persistent",
+          "repeat_minutes": "Repeat every (minutes)",
+          "repeat_count": "Repeat at most",
           "home_only": "Home only",
           "target_recipients": "Target recipients",
           "remove": "Remove this scheduled notification"
@@ -117,7 +123,9 @@
           "persistent": "If true, requires acknowledgement via the built-in persistent notification system, same as send_notification's own \"persistent\" field.",
           "home_only": "Only deliver to recipients whose assigned person entity is currently home.",
           "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients.",
-          "labels": "Labels to attach (defined per channel under Manage channels)."
+          "labels": "Labels to attach (defined per channel under Manage channels).",
+          "repeat_minutes": "Persistent only: push again every this many minutes until acknowledged. Blank = no repeats.",
+          "repeat_count": "Maximum number of repeats. Blank = until acknowledged."
         }
       },
       "manage_calendar": {
@@ -141,6 +149,8 @@
           "labels": "Labels",
           "importance": "Importance",
           "persistent": "Persistent",
+          "repeat_minutes": "Repeat every (minutes)",
+          "repeat_count": "Repeat at most",
           "home_only": "Home only",
           "target_recipients": "Target recipients",
           "remove": "Remove this calendar notification"
@@ -153,7 +163,9 @@
           "persistent": "If true, requires acknowledgement via the built-in persistent notification system, same as send_notification's own \"persistent\" field.",
           "home_only": "Only deliver to recipients whose assigned person entity is currently home.",
           "target_recipients": "Restrict delivery to these recipients (by name), same as send_notification's own \"target_recipients\" field. Empty = consider all enabled recipients.",
-          "labels": "Labels to attach (defined per channel under Manage channels)."
+          "labels": "Labels to attach (defined per channel under Manage channels).",
+          "repeat_minutes": "Persistent only: push again every this many minutes until acknowledged. Blank = no repeats.",
+          "repeat_count": "Maximum number of repeats. Blank = until acknowledged."
         }
       },
       "manage_chatrooms": {
@@ -211,17 +223,242 @@
       "duplicate_key": "A channel with this key already exists.",
       "invalid_cron": "Not a valid cron expression.",
       "unknown": "Unexpected error saving - check the Home Assistant log for details.",
-      "invalid_key": "The key can't be empty."
+      "invalid_key": "The key can't be empty.",
+      "unknown_notify_service": "This notify service doesn't exist (yet), so the test notification can't be sent."
     }
   },
   "issues": {
-    "deprecated_service": {
-      "title": "Deprecated service {old}",
-      "description": "{old} is deprecated after the rename to Sentinel. Use {new} in your automations and scripts instead; the old service will be removed in a future release."
-    },
     "legacy_integration_folder": {
       "title": "Remove the old K93 ANS integration folder",
       "description": "Sentinel has taken over the K93 ANS configuration. The old integration files are still in {path}. Delete that folder and restart Home Assistant."
+    }
+  },
+  "selector": {
+    "importance": {
+      "options": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "critical": "Critical"
+      }
+    },
+    "manage": {
+      "options": {
+        "__add_new__": "Add new…"
+      }
+    },
+    "linked_user": {
+      "options": {
+        "__none__": "(not linked)"
+      }
+    },
+    "access_mode": {
+      "options": {
+        "all": "All users",
+        "selected": "Selected users"
+      }
+    },
+    "language": {
+      "options": {
+        "auto": "Automatic (match Home Assistant)",
+        "en": "English",
+        "no": "Norsk"
+      }
+    }
+  },
+  "services": {
+    "send_notification": {
+      "name": "Send notification",
+      "description": "Sends a notification through Sentinel. It is fanned out to configured recipients and channels according to their filters, and optionally created as a persistent notification requiring acknowledgement. Returns the notification id (and the recipients it was pushed to) when called with a response variable.",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "Notification title."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Notification message body."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "An mdi: icon shown as the notification's small icon/glyph. If it's not an mdi: icon (and \"image\" is not set), it's used as the picture instead, for backward compatibility - prefer the separate \"image\" field for pictures going forward."
+        },
+        "image": {
+          "name": "Image",
+          "description": "A picture to attach to the notification: an image URL, or an HA-relative path such as /local/... or /api/camera_proxy/.... Shown as the picture on companion-app push notifications, embedded in the message (as markdown) when \"persistent\" is true, and shown as a preview in the Lovelace card."
+        },
+        "image_entity": {
+          "name": "Image entity",
+          "description": "A camera or image entity to snapshot for the picture instead of supplying \"image\" directly. Saved under /config/www/sentinel/notifications/<channel>/, uniquely named per capture, and served back as an \"image\" path automatically. Ignored if \"image\" is also given - an explicit \"image\" always wins. Old captures are cleaned up automatically once no stored notification references them anymore."
+        },
+        "channel": {
+          "name": "Channel",
+          "description": "Configured channel key, or a list of them. Built-in channels are info, alert, event, reminder, security, system and chat. When several are given, a recipient receives the notification if it's subscribed to any one of them; the first channel is used for anything that can only carry one value (Android's notification channel, the card's icon color). Defaults to \"default\"."
+        },
+        "labels": {
+          "name": "Labels",
+          "description": "Optional label key, or a list of them, to sort the notification further inside its channel (a \"sub-channel\"). Labels are defined per channel under Manage channels; cards can filter on them. Unknown labels are kept as-is."
+        },
+        "importance": {
+          "name": "Importance",
+          "description": "Importance level."
+        },
+        "actions": {
+          "name": "Actions",
+          "description": "List of action buttons, each with \"action\" and \"title\" keys."
+        },
+        "persistent": {
+          "name": "Persistent",
+          "description": "If true, requires acknowledgement via the built-in persistent notification system."
+        },
+        "data": {
+          "name": "Data",
+          "description": "Arbitrary extra fields passed through to notify.* targets."
+        },
+        "target_recipients": {
+          "name": "Target recipients",
+          "description": "Restrict delivery to these recipients only, given by their configured name (as shown in Manage Recipients) or their id. Case-insensitive. Omit to consider all recipients."
+        },
+        "home_only": {
+          "name": "Home only",
+          "description": "Only deliver to recipients whose assigned person entity is currently \"home\". Recipients with no person assigned are unaffected and always considered."
+        },
+        "live_id": {
+          "name": "Live ID",
+          "description": "A stable id you choose (e.g. \"vacuum_kitchen\"). Calling send_notification again with the same live_id updates that same notification in place - same persistent notification, same phone push (via a shared tag), same history row - instead of creating a new one each time. Useful for a repeatedly-updated status notification (e.g. live vacuum-cleaning stats/map). Call end_live_notification with the same live_id when the live session is over to dismiss and clear it everywhere."
+        },
+        "interactive_only": {
+          "name": "Interactive only",
+          "description": "If true, this live notification's push is auto-cleared for any recipient whose \"interactive\" entity (see Manage Recipients) has been off longer than the Advanced \"Live notification inactivity timeout\". Defaults to false (delivered and kept regardless of recipient interactivity). Meaningless without both live_id and a recipient's interactive entity being set, and without that Advanced timeout being non-zero."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Free-text label for what triggered this notification."
+        },
+        "show_in_history": {
+          "name": "Show in history",
+          "description": "If false, this notification is excluded from the card's History list and ticker, and from the \"stored\"/\"sent\" diagnostic sensors. It's still delivered, still counted in Unacknowledged while outstanding, and can still be acknowledged/ended normally - use this for frequent or transient updates (e.g. a live status notification) you don't want cluttering history. Defaults to true."
+        },
+        "dismiss_on_action": {
+          "name": "Dismiss on action",
+          "description": "If false (default), pressing an action button other than Acknowledge (e.g. a vacuum's Pause/Resume) keeps the companion-app notification open instead of closing it, by marking it \"sticky\". Set to true to restore the old behavior where any action press dismisses the notification. Ignored (always kept open) when \"persistent\" is true."
+        },
+        "clear_on_acknowledge": {
+          "name": "Clear on acknowledge",
+          "description": "If true (default), acknowledging this notification - from the card, the sentinel.acknowledge service, or the phone's own Acknowledge button - also clears the pushed notification on every companion-app recipient it reached. Set to false to leave the phone notification in place even after it's been acknowledged elsewhere."
+        },
+        "repeat_minutes": {
+          "name": "Repeat every (minutes)",
+          "description": "Push the notification again every this many minutes until it's acknowledged. Only for persistent notifications; quiet hours still apply to each repeat."
+        },
+        "repeat_count": {
+          "name": "Repeat at most",
+          "description": "Maximum number of repeats. Leave empty to repeat until acknowledged."
+        }
+      }
+    },
+    "acknowledge": {
+      "name": "Acknowledge",
+      "description": "Marks a notification as acknowledged and dismisses its persistent notification, if any.",
+      "fields": {
+        "notification_id": {
+          "name": "Notification ID",
+          "description": "The id of the notification to acknowledge."
+        }
+      }
+    },
+    "end_live_notification": {
+      "name": "End live notification",
+      "description": "Ends a live notification started via send_notification's live_id field: dismisses its persistent notification (if any), clears the pushed notification on every companion-app recipient it reached, and marks it acknowledged so it moves out of the Unacknowledged list. A no-op if no active live notification exists for that live_id.",
+      "fields": {
+        "live_id": {
+          "name": "Live ID",
+          "description": "The live_id used in the send_notification calls to update."
+        }
+      }
+    },
+    "delete_notification": {
+      "name": "Delete notification",
+      "description": "Permanently deletes one notification from history. If it's still outstanding (persistent and not yet acknowledged), its persistent notification is dismissed and any pushed companion-app notification is cleared first, so nothing is left dangling with no history entry behind it.",
+      "fields": {
+        "notification_id": {
+          "name": "Notification ID",
+          "description": "The id of the notification to delete."
+        }
+      }
+    },
+    "clear_history": {
+      "name": "Clear history",
+      "description": "Deletes multiple notifications from history at once. By default only ones that aren't still actively pending acknowledgement are removed (the same rule the History section itself uses), so a still-outstanding notification is never silently lost - set include_unacknowledged to also delete those.",
+      "fields": {
+        "include_unacknowledged": {
+          "name": "Include unacknowledged",
+          "description": "If true, also delete notifications that still require acknowledgement and haven't gotten it yet."
+        }
+      }
+    },
+    "restore_config_from_snapshot": {
+      "name": "Restore config from snapshot",
+      "description": "Replaces the ENTIRE current configuration (recipients, channels, scheduled and calendar notifications, Advanced settings) with the contents of config.json - the backup snapshot Sentinel writes automatically alongside database.db on every Configure save. Intended for recovery if the config entry itself is ever lost or corrupted, not routine use. Admin only. The integration reloads immediately afterward, same as saving through Configure would.",
+      "fields": {
+        "confirm": {
+          "name": "Confirm",
+          "description": "Must be set to true to actually perform the restore - a safety check against calling this by accident, since it overwrites everything currently configured."
+        }
+      }
+    },
+    "send_chat_message": {
+      "name": "Send chat message",
+      "description": "Posts a message into a chatroom (see Manage chatrooms). Meant for automations/scripts, not real user-to-user chat - that's what the sentinel-chat-card's own composer is for. Setting sender_name and/or sender_icon posts as that System/bot-style identity regardless of who or what triggered the call - including a manual test from Developer Tools. Leave both blank to instead attribute the message to whichever real Home Assistant user triggered the call (e.g. a script you ran yourself), the same as one sent from the card; falls back to a plain \"System\" identity if the call has no real user behind it either (e.g. a purely time/state-triggered automation). Non-admin users can only post to chatrooms they have access to.",
+      "fields": {
+        "chatroom_id": {
+          "name": "Chatroom",
+          "description": "The chatroom to post to, given by its id or its configured name (as shown in Manage chatrooms), case-insensitively."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The message text."
+        },
+        "sender_name": {
+          "name": "Sender name",
+          "description": "Only used when this call has no real Home Assistant user behind it (see above). Defaults to \"System\" if left blank."
+        },
+        "sender_icon": {
+          "name": "Sender icon",
+          "description": "Only used when this call has no real Home Assistant user behind it (see above). An mdi: icon. Defaults to mdi:robot if left blank."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "channels": {
+        "name": "Configured channels"
+      },
+      "recipients": {
+        "name": "Configured recipients"
+      },
+      "chatrooms": {
+        "name": "Configured chatrooms"
+      },
+      "stored": {
+        "name": "Notifications stored"
+      },
+      "sent_today": {
+        "name": "Sent today"
+      },
+      "sent_this_week": {
+        "name": "Sent this week"
+      },
+      "sent_this_month": {
+        "name": "Sent this month"
+      },
+      "unacknowledged": {
+        "name": "Unacknowledged notifications"
+      },
+      "database_size": {
+        "name": "Database size"
+      }
     }
   }
 }

@@ -107,7 +107,7 @@ class SentinelSensorDescription(SensorEntityDescription):
 SENSORS: tuple[SentinelSensorDescription, ...] = (
     SentinelSensorDescription(
         key="channels",
-        name="Configured channels",
+        translation_key="channels",
         icon="mdi:tune-vertical",
         value_fn=lambda rt: len(rt.options.get(CONF_CHANNELS, [])),
         live=False,
@@ -115,7 +115,7 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
     ),
     SentinelSensorDescription(
         key="recipients",
-        name="Configured recipients",
+        translation_key="recipients",
         icon="mdi:account-multiple",
         value_fn=lambda rt: len(rt.options.get(CONF_RECIPIENTS, [])),
         live=False,
@@ -123,7 +123,7 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
     ),
     SentinelSensorDescription(
         key="chatrooms",
-        name="Configured chatrooms",
+        translation_key="chatrooms",
         icon="mdi:forum",
         value_fn=lambda rt: len(rt.options.get(CONF_CHATROOMS, [])),
         live=False,
@@ -131,31 +131,31 @@ SENSORS: tuple[SentinelSensorDescription, ...] = (
     ),
     SentinelSensorDescription(
         key="stored",
-        name="Notifications stored",
+        translation_key="stored",
         icon="mdi:database",
         value_fn=_stat("stored"),
     ),
     SentinelSensorDescription(
         key="sent_today",
-        name="Sent today",
+        translation_key="sent_today",
         icon="mdi:calendar-today",
         value_fn=_stat("sent_today"),
     ),
     SentinelSensorDescription(
         key="sent_this_week",
-        name="Sent this week",
+        translation_key="sent_this_week",
         icon="mdi:calendar-week",
         value_fn=_stat("sent_this_week"),
     ),
     SentinelSensorDescription(
         key="sent_this_month",
-        name="Sent this month",
+        translation_key="sent_this_month",
         icon="mdi:calendar-month",
         value_fn=_stat("sent_this_month"),
     ),
     SentinelSensorDescription(
         key="unacknowledged",
-        name="Unacknowledged notifications",
+        translation_key="unacknowledged",
         icon="mdi:bell-alert",
         value_fn=_stat("unacknowledged"),
     ),
@@ -226,7 +226,7 @@ class SentinelSensor(SentinelSensorBase):
 
 class SentinelDatabaseSizeSensor(SentinelSensorBase):
 
-    _attr_name = "Database size"
+    _attr_translation_key = "database_size"
     _attr_icon = "mdi:database-outline"
     _attr_device_class = SensorDeviceClass.DATA_SIZE
     _attr_native_unit_of_measurement = UnitOfInformation.BYTES

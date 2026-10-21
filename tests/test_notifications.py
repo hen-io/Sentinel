@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
 
 from custom_components.sentinel.const import DOMAIN
 from custom_components.sentinel.legacy import LEGACY_ACK_ACTION_PREFIX, LEGACY_DOMAIN
@@ -46,10 +45,8 @@ async def test_persistent_ack_via_legacy_mobile_action(hass: HomeAssistant, load
     assert store.async_get(response["id"])["acknowledged_via"] == "mobile_action"
 
 
-async def test_legacy_service_alias_and_repair_issue(hass: HomeAssistant, loaded_entry):
-    response = await _send(hass, domain=LEGACY_DOMAIN, channel="info")
-    assert loaded_entry.runtime_data.store.async_get(response["id"]) is not None
-    assert ir.async_get(hass).async_get_issue(DOMAIN, "deprecated_service_send_notification")
+async def test_legacy_services_removed(hass: HomeAssistant, loaded_entry):
+    assert not hass.services.async_services_for_domain(LEGACY_DOMAIN)
 
 
 async def test_clear_history_keeps_outstanding(hass: HomeAssistant, loaded_entry):

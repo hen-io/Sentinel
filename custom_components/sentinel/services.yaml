@@ -104,6 +104,8 @@ send_notification:
       description: List of action buttons, each with "action" and "title" keys.
       required: false
       example: '[{"action": "OPEN_CAMERA", "title": "View Camera"}]'
+      selector:
+        object:
     persistent:
       name: Persistent
       description: >-
@@ -117,6 +119,8 @@ send_notification:
       name: Data
       description: Arbitrary extra fields passed through to notify.* targets.
       required: false
+      selector:
+        object:
     target_recipients:
       name: Target recipients
       description: >-
@@ -210,6 +214,31 @@ send_notification:
       default: true
       selector:
         boolean:
+    repeat_minutes:
+      name: Repeat every (minutes)
+      description: >-
+        Push the notification again every this many minutes until it's
+        acknowledged. Only for persistent notifications; quiet hours still
+        apply to each repeat.
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 1440
+          unit_of_measurement: min
+          mode: box
+    repeat_count:
+      name: Repeat at most
+      description: >-
+        Maximum number of repeats. Leave empty to repeat until acknowledged.
+      required: false
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
 
 acknowledge:
   name: Acknowledge

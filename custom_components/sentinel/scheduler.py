@@ -30,6 +30,8 @@ def trigger_notification_data(item: dict[str, Any], source: str) -> dict[str, An
         "target_recipients": item.get("target_recipients") or None,
         "home_only": item.get("home_only", False),
         "source": f"{source}:{item.get('name') or item.get('id')}",
+        "repeat_minutes": item.get("repeat_minutes"),
+        "repeat_count": item.get("repeat_count"),
     }
 
 

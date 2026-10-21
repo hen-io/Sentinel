@@ -34,14 +34,16 @@ from .const import (
     DOMAIN,
     IMPORTANCE_LEVELS,
     NAME,
+    TEST_MESSAGES,
 )
+from .dispatch import resolve_language
 from .options import channel_labels, default_options, normalize_options
 from .routing import normalize_key, normalize_keys
 
 _LOGGER = logging.getLogger(__name__)
 
 ADD_NEW = "__add_new__"
-CHANNEL_IMPORTANCE_FIELD_PREFIX = "importance_for_"
+NOT_LINKED = "__none__"
 
 
 class SentinelConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -111,7 +113,13 @@ COLLECTIONS: dict[str, _Collection] = {
 
 
 def _importance_selector() -> selector.SelectSelector:
-    return selector.SelectSelector(selector.SelectSelectorConfig(options=IMPORTANCE_LEVELS))
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(options=IMPORTANCE_LEVELS, translation_key="importance")
+    )
+
+
+def _multiline() -> selector.TextSelector:
+    return selector.TextSelector(selector.TextSelectorConfig(multiline=True))
 
 
 def _number_selector(minimum: int) -> selector.NumberSelector:
@@ -167,6 +175,9 @@ class SentinelOptionsFlow(OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[*(c.manage_step for c in COLLECTIONS.values()), "advanced", "finish"],
+            description_placeholders={
+                kind: str(len(self.options[collection.option_key])) for kind, collection in COLLECTIONS.items()
+            },
         )
 
     async def async_step_finish(self, user_input: dict | None = None) -> ConfigFlowResult:
@@ -188,7 +199,7 @@ class SentinelOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(collection.select_field): selector.SelectSelector(
-                        selector.SelectSelectorConfig(options=choices, mode="dropdown")
+                        selector.SelectSelectorConfig(options=choices, mode="dropdown", translation_key="manage")
                     )
                 }
             ),
@@ -220,6 +231,7 @@ class SentinelOptionsFlow(OptionsFlow):
                 else:
                     self.options[collection.option_key] = [*items, item]
                 self._save()
+                await self._after_save(kind, item, user_input)
                 if reopen:
                     self._editing_id = item["id"]
                     return await self._edit(kind, None)
@@ -231,6 +243,16 @@ class SentinelOptionsFlow(OptionsFlow):
         if user_input is not None:
             schema = self.add_suggested_values_to_schema(schema, user_input)
         return self.async_show_form(step_id=collection.edit_step, data_schema=schema, errors=errors)
+
+    async def _after_save(self, kind: str, item: dict, user_input: dict) -> None:
+        if kind == "recipient" and user_input.get("send_test"):
+            title, message = TEST_MESSAGES.get(resolve_language(self.hass, self.options), TEST_MESSAGES["en"])
+            try:
+                await self.hass.services.async_call(
+                    "notify", item["notify_service"], {"title": title, "message": message.format(name=item["name"])}
+                )
+            except Exception:
+                _LOGGER.exception("Sentinel: test notification to notify.%s failed", item["notify_service"])
 
     async def async_step_manage_recipients(self, user_input: dict | None = None) -> ConfigFlowResult:
         return await self._manage("recipient", user_input)
@@ -267,7 +289,13 @@ class SentinelOptionsFlow(OptionsFlow):
     async def _recipient_schema(self, existing: dict | None) -> dict[Any, Any]:
         e = existing or {}
         notify_services = sorted(self.hass.services.async_services().get("notify", {}))
-        users = [{"value": "", "label": "(not linked)"}, *await self._user_choices()]
+        users = [{"value": NOT_LINKED, "label": "(not linked)"}, *await self._user_choices()]
+        names = {c["key"]: c["name"] for c in self.options[CONF_CHANNELS]}
+        overrides = [
+            {"value": f"{key}:{level}", "label": f"{name}: {level.capitalize()}"}
+            for key, name in names.items()
+            for level in IMPORTANCE_LEVELS
+        ]
         schema: dict[Any, Any] = {
             vol.Required("name", default=e.get("name", "")): selector.TextSelector(),
             vol.Required("notify_service", default=e.get("notify_service", vol.UNDEFINED)): selector.SelectSelector(
@@ -279,55 +307,51 @@ class SentinelOptionsFlow(OptionsFlow):
             _suggested("interactive_entity_id", existing): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor")
             ),
-            vol.Optional("linked_user_id", default=e.get("linked_user_id") or ""): selector.SelectSelector(
-                selector.SelectSelectorConfig(options=users, mode="dropdown")
+            vol.Optional("linked_user_id", default=e.get("linked_user_id") or NOT_LINKED): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=users, mode="dropdown", translation_key="linked_user")
             ),
             vol.Optional("min_importance", default=e.get("min_importance", "normal")): _importance_selector(),
             vol.Optional("allowed_channels", default=e.get("allowed_channels", [])): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=self._channel_choices(), multiple=True, custom_value=True)
             ),
+            vol.Optional(
+                "channel_importance",
+                default=[f"{key}:{level}" for key, level in e.get("channel_importance", {}).items()],
+            ): selector.SelectSelector(selector.SelectSelectorConfig(options=overrides, multiple=True)),
             _suggested("quiet_start", existing): selector.TimeSelector(),
             _suggested("quiet_end", existing): selector.TimeSelector(),
             vol.Optional(
                 "quiet_min_importance", default=e.get("quiet_min_importance", DEFAULT_QUIET_MIN_IMPORTANCE)
             ): _importance_selector(),
             vol.Optional("enabled", default=e.get("enabled", True)): selector.BooleanSelector(),
+            vol.Optional("send_test", default=False): selector.BooleanSelector(),
         }
-        overrides = [{"value": "", "label": "(use recipient default)"}, *IMPORTANCE_LEVELS]
-        channel_importance = e.get("channel_importance", {})
-        for channel_key in e.get("allowed_channels", []):
-            field = vol.Optional(
-                f"{CHANNEL_IMPORTANCE_FIELD_PREFIX}{channel_key}", default=channel_importance.get(channel_key, "")
-            )
-            schema[field] = selector.SelectSelector(selector.SelectSelectorConfig(options=overrides))
         return schema
 
     def _recipient_item(self, user_input: dict, existing: dict | None) -> tuple[dict, bool]:
-        allowed = user_input.get("allowed_channels", [])
+        if user_input.get("send_test") and not self.hass.services.has_service("notify", user_input["notify_service"]):
+            raise _FieldError("notify_service", "unknown_notify_service")
+        channel_importance: dict[str, str] = {}
+        for value in user_input.get("channel_importance", []):
+            key, _, level = value.rpartition(":")
+            if key and level in IMPORTANCE_LEVELS:
+                channel_importance[key] = level
         item = {
             "id": existing["id"] if existing else str(uuid.uuid4()),
             "name": user_input["name"],
             "notify_service": user_input["notify_service"],
             "person_entity_id": user_input.get("person_entity_id") or None,
             "interactive_entity_id": user_input.get("interactive_entity_id") or None,
-            "linked_user_id": user_input.get("linked_user_id") or None,
+            "linked_user_id": user_input.get("linked_user_id") if user_input.get("linked_user_id") not in (None, "", NOT_LINKED) else None,
             "min_importance": user_input["min_importance"],
-            "allowed_channels": allowed,
-            "channel_importance": {
-                key.removeprefix(CHANNEL_IMPORTANCE_FIELD_PREFIX): value
-                for key, value in user_input.items()
-                if key.startswith(CHANNEL_IMPORTANCE_FIELD_PREFIX)
-                and value
-                and key.removeprefix(CHANNEL_IMPORTANCE_FIELD_PREFIX) in allowed
-            },
+            "allowed_channels": user_input.get("allowed_channels", []),
+            "channel_importance": channel_importance,
             "quiet_start": user_input.get("quiet_start") or None,
             "quiet_end": user_input.get("quiet_end") or None,
             "quiet_min_importance": user_input.get("quiet_min_importance", DEFAULT_QUIET_MIN_IMPORTANCE),
             "enabled": user_input["enabled"],
         }
-        # Reopen so per-channel importance fields appear for newly allowed channels.
-        reopen = set(allowed) != set((existing or {}).get("allowed_channels", []))
-        return item, reopen
+        return item, False
 
     # Channels
 
@@ -358,6 +382,8 @@ class SentinelOptionsFlow(OptionsFlow):
             label_key = normalize_key(name)
             if label_key and all(label["key"] != label_key for label in labels):
                 labels.append({"key": label_key, "name": name.strip()})
+        if existing and existing["key"] != key:
+            self._rename_channel_references(existing["key"], key)
         item = {
             "id": existing["id"] if existing else str(uuid.uuid4()),
             "key": key,
@@ -370,6 +396,17 @@ class SentinelOptionsFlow(OptionsFlow):
             "labels": labels,
         }
         return item, False
+
+    def _rename_channel_references(self, old: str, new: str) -> None:
+        for recipient in self.options[CONF_RECIPIENTS]:
+            recipient["allowed_channels"] = [new if c == old else c for c in recipient.get("allowed_channels", [])]
+            importance = recipient.get("channel_importance") or {}
+            if old in importance:
+                recipient["channel_importance"] = {new if k == old else k: v for k, v in importance.items()}
+        for key in (CONF_SCHEDULED_NOTIFICATIONS, CONF_CALENDAR_NOTIFICATIONS):
+            for item in self.options[key]:
+                if item.get("channel") == old:
+                    item["channel"] = new
 
     # Scheduled and calendar notifications
 
@@ -385,6 +422,8 @@ class SentinelOptionsFlow(OptionsFlow):
             ),
             vol.Optional("importance", default=e.get("importance", "normal")): _importance_selector(),
             vol.Optional("persistent", default=e.get("persistent", False)): selector.BooleanSelector(),
+            _suggested("repeat_minutes", existing): _number_selector(1),
+            _suggested("repeat_count", existing): _number_selector(1),
             vol.Optional("home_only", default=e.get("home_only", False)): selector.BooleanSelector(),
             vol.Optional("target_recipients", default=e.get("target_recipients", [])): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=self._recipient_choices(), multiple=True, custom_value=True)
@@ -402,6 +441,8 @@ class SentinelOptionsFlow(OptionsFlow):
             "labels": normalize_keys(user_input.get("labels")),
             "importance": user_input["importance"],
             "persistent": user_input["persistent"],
+            "repeat_minutes": _optional_int(user_input.get("repeat_minutes")),
+            "repeat_count": _optional_int(user_input.get("repeat_count")),
             "home_only": user_input["home_only"],
             "target_recipients": user_input.get("target_recipients", []),
         }
@@ -413,7 +454,7 @@ class SentinelOptionsFlow(OptionsFlow):
             vol.Required("cron", default=e.get("cron", "0 8 * * *")): selector.TextSelector(),
             vol.Optional("enabled", default=e.get("enabled", True)): selector.BooleanSelector(),
             vol.Required("title", default=e.get("title", "")): selector.TextSelector(),
-            vol.Required("message", default=e.get("message", "")): selector.TextSelector(),
+            vol.Required("message", default=e.get("message", "")): _multiline(),
             **self._trigger_fields(existing),
         }
 
@@ -439,7 +480,7 @@ class SentinelOptionsFlow(OptionsFlow):
             vol.Optional("enabled", default=e.get("enabled", True)): selector.BooleanSelector(),
             vol.Optional("all_day_time", default=e.get("all_day_time", DEFAULT_ALL_DAY_TIME)): selector.TimeSelector(),
             _suggested("title", existing, ""): selector.TextSelector(),
-            _suggested("message", existing, ""): selector.TextSelector(),
+            _suggested("message", existing, ""): _multiline(),
             **self._trigger_fields(existing),
         }
 
@@ -462,12 +503,7 @@ class SentinelOptionsFlow(OptionsFlow):
             _suggested("icon", existing, ""): selector.TextSelector(),
             vol.Optional("enabled", default=e.get("enabled", True)): selector.BooleanSelector(),
             vol.Optional("access_mode", default=e.get("access_mode", "all")): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        {"value": "all", "label": "All users"},
-                        {"value": "selected", "label": "Selected users"},
-                    ]
-                )
+                selector.SelectSelectorConfig(options=["all", "selected"], translation_key="access_mode")
             ),
             vol.Optional("allowed_user_ids", default=e.get("allowed_user_ids", [])): selector.SelectSelector(
                 selector.SelectSelectorConfig(options=await self._user_choices(), multiple=True)
@@ -523,13 +559,7 @@ class SentinelOptionsFlow(OptionsFlow):
                 selector.SelectSelectorConfig(options=DEFAULT_CHAT_REACTION_EMOJI, multiple=True, custom_value=True)
             ),
             vol.Optional(CONF_LANGUAGE, default=options[CONF_LANGUAGE]): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        {"value": "auto", "label": "Automatic (match Home Assistant)"},
-                        {"value": "en", "label": "English"},
-                        {"value": "no", "label": "Norsk"},
-                    ]
-                )
+                selector.SelectSelectorConfig(options=["auto", "en", "no"], translation_key="language")
             ),
             vol.Optional(
                 CONF_LIVE_INACTIVITY_TIMEOUT_MINUTES, default=options[CONF_LIVE_INACTIVITY_TIMEOUT_MINUTES]

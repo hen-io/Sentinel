@@ -1,7 +1,7 @@
 """Compatibility with the pre-rename "K93 ANS" integration (domain k93_ans).
 
-Covers: importing the old config entry (entities/device kept), the deprecated
-k93_ans.* services and k93_ans/* websocket commands, and old push action ids.
+Covers: importing the old config entry (entities/device kept), the k93_ans/* websocket
+commands (older cards) and old push action ids.
 Data folder/image migration lives in migration.py.
 
 To drop K93 ANS support: delete this module and the call sites marked `# legacy`.
@@ -10,12 +10,11 @@ To drop K93 ANS support: delete this module and the call sites marked `# legacy`
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
@@ -31,7 +30,6 @@ LEGACY_WS_PREFIX = LEGACY_DOMAIN
 LEGACY_STORAGE_DIR_NAME = "K93-Advanced-Notification-System"
 LEGACY_IMAGES_DIR_NAME = LEGACY_STORAGE_DIR_NAME
 
-ISSUE_DEPRECATED_SERVICE = "deprecated_service"
 ISSUE_LEGACY_FOLDER = "legacy_integration_folder"
 
 
@@ -106,49 +104,6 @@ def ack_action_prefixes() -> tuple[str, ...]:
 
 def ws_prefixes() -> tuple[str, ...]:
     return (LEGACY_WS_PREFIX,)
-
-
-def _deprecation_notice(hass: HomeAssistant, service: str) -> Callable[[ServiceCall], None]:
-    issue_id = f"{ISSUE_DEPRECATED_SERVICE}_{service}"
-
-    @callback
-    def _notice(_call: ServiceCall) -> None:
-        if ir.async_get(hass).async_get_issue(DOMAIN, issue_id):
-            return
-        _LOGGER.warning(
-            "%s.%s is deprecated, use %s.%s instead", LEGACY_DOMAIN, service, DOMAIN, service
-        )
-        ir.async_create_issue(
-            hass,
-            DOMAIN,
-            issue_id,
-            is_fixable=False,
-            is_persistent=False,
-            severity=ir.IssueSeverity.WARNING,
-            translation_key=ISSUE_DEPRECATED_SERVICE,
-            translation_placeholders={
-                "old": f"{LEGACY_DOMAIN}.{service}",
-                "new": f"{DOMAIN}.{service}",
-            },
-        )
-
-    return _notice
-
-
-def async_register_legacy_services(
-    hass: HomeAssistant,
-    services: Iterable[Any],
-    register: Callable[..., None],
-) -> None:
-    """Register every Sentinel service again under k93_ans.*, with a deprecation notice."""
-    for spec in services:
-        register(hass, LEGACY_DOMAIN, spec, on_call=_deprecation_notice(hass, spec.name))
-
-
-@callback
-def async_unregister_legacy_services(hass: HomeAssistant, services: Iterable[Any]) -> None:
-    for spec in services:
-        hass.services.async_remove(LEGACY_DOMAIN, spec.name)
 
 
 async def async_check_legacy_folder(hass: HomeAssistant) -> None:

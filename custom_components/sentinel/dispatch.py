@@ -104,6 +104,9 @@ def build_record(
         "show_in_history": data.get("show_in_history", True),
         "dismiss_on_action": data.get("dismiss_on_action", False),
         "clear_on_acknowledge": data.get("clear_on_acknowledge", True),
+        "repeat_minutes": data.get("repeat_minutes"),
+        "repeat_count": data.get("repeat_count"),
+        "repeats_sent": 0,
     }
 
 
@@ -272,6 +275,8 @@ async def async_send_notification(
         if record["persistent"]:
             _create_persistent_notification(hass, record)
         await store.async_add(record)
+        if runtime.reminders:
+            runtime.reminders.async_schedule(record)
 
     async_dispatcher_send(hass, SIGNAL_UPDATED, record)
     hass.bus.async_fire(
@@ -282,6 +287,13 @@ async def async_send_notification(
         },
     )
     return record
+
+
+async def async_resend(hass: HomeAssistant, runtime: SentinelData, record: NotificationRecord) -> None:
+    """Reminder: push an unacknowledged notification again to everyone it still matches."""
+    await _async_deliver(hass, runtime, record, record)
+    record["repeats_sent"] = record.get("repeats_sent", 0) + 1
+    await runtime.store.async_update_record(record)
 
 
 def async_restore_persistent_notifications(hass: HomeAssistant, runtime: SentinelData) -> None:
@@ -362,6 +374,8 @@ async def async_acknowledge(
     if record is None:
         return None
     _LOGGER.debug("Sentinel acknowledged %s via %s", notification_id, via)
+    if runtime.reminders:
+        runtime.reminders.async_cancel(notification_id)
     if record.get("persistent"):
         persistent_notification.async_dismiss(hass, notification_id)
     if record.get("clear_on_acknowledge", True):
@@ -395,6 +409,8 @@ async def async_delete_notifications(
         record = runtime.store.async_get(notification_id)
         if record is None or not is_outstanding(record):
             continue
+        if runtime.reminders:
+            runtime.reminders.async_cancel(notification_id)
         if record.get("persistent"):
             persistent_notification.async_dismiss(hass, notification_id)
         await _clear_mobile_notifications(hass, record)

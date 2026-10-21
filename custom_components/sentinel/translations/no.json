@@ -7,7 +7,7 @@
       },
       "import_legacy": {
         "title": "Importer K93 ANS",
-        "description": "Et eksisterende K93 ANS-oppsett ble funnet. Sentinel tar det over: mottakere, kanaler, tidsplaner, chatterom, historikk og sensorentiteter beholdes. Datamappen kopieres til /config/sentinel (den gamle K93-Advanced-Notification-System-mappen beholdes som sikkerhetskopi), og de gamle k93_ans.*-tjenestene fungerer fortsatt inntil videre. Send inn for å fortsette."
+        "description": "Et eksisterende K93 ANS-oppsett ble funnet. Sentinel tar det over: mottakere, kanaler, tidsplaner, chatterom, historikk og sensorentiteter beholdes. Datamappen kopieres til /config/sentinel (den gamle K93-Advanced-Notification-System-mappen beholdes som sikkerhetskopi). Oppdater automasjoner og skript fra k93_ans.* til sentinel.*-tjenester. Send inn for å fortsette."
       }
     },
     "abort": {
@@ -18,6 +18,7 @@
     "step": {
       "init": {
         "title": "Sentinel",
+        "description": "Mottakere: {recipient} · Kanaler: {channel} · Planlagte: {scheduled} · Kalender: {calendar} · Chatterom: {chatroom}",
         "menu_options": {
           "manage_recipients": "Administrer mottakere",
           "manage_channels": "Administrer kanaler",
@@ -36,7 +37,6 @@
       },
       "edit_recipient": {
         "title": "Mottaker",
-        "description": "Å lagre etter at du har lagt til en kanal i \"Tillatte kanaler\" åpner dette skjemaet på nytt med et ekstra \"Importance for\"-felt for den, slik at du kan overstyre minimum viktighet for akkurat den kanalen.",
         "data": {
           "name": "Navn",
           "notify_service": "Varslingstjeneste",
@@ -45,20 +45,24 @@
           "linked_user_id": "Tilknyttet bruker",
           "min_importance": "Minimum viktighet",
           "allowed_channels": "Tillatte kanaler",
+          "channel_importance": "Minimum viktighet per kanal",
           "quiet_start": "Stilletid start",
           "quiet_end": "Stilletid slutt",
           "quiet_min_importance": "Minimum viktighet i stilletid",
           "enabled": "Aktivert",
+          "send_test": "Send et testvarsel etter lagring",
           "remove": "Fjern denne mottakeren"
         },
         "data_description": {
           "person_entity_id": "Valgfritt - kun relevant når et varsel setter \"kun hjemme\"; kreves for at det filteret skal påvirke denne mottakeren i det hele tatt.",
           "interactive_entity_id": "Valgfritt - en binary_sensor som er \"på\" mens denne mottakerens telefon er i bruk. Kreves for inaktivitetstidsavbruddet for direktevarsler under Avansert.",
           "linked_user_id": "Valgfritt - Home Assistant-brukeren denne mottakerens telefon tilhører. Kreves for at denne mottakeren skal motta et chatterom sin varsel-push for nye meldinger (se Administrer chatterom); har ingen effekt ellers.",
-          "min_importance": "Standard minimum viktighet for denne mottakeren - kan overstyres per kanal, i feltene som vises nedenfor etter at et kanalvalg er lagret.",
+          "min_importance": "Standard minimum viktighet for denne mottakeren.",
           "allowed_channels": "Tom = alle kanaler.",
           "quiet_start": "Valgfritt. Mellom start og slutt (lokal tid, kan gå over midnatt) når kun varsler med minst stilletidens viktighet frem til denne mottakeren.",
-          "quiet_min_importance": "Brukes kun i stilletid."
+          "quiet_min_importance": "Brukes kun i stilletid.",
+          "channel_importance": "Valgfrie overstyringer av minimum viktighet for enkeltkanaler, f.eks. Security: Lav for å alltid få sikkerhetsvarsler.",
+          "send_test": "Sender en kort test-push til mottakerens varslingstjeneste rett etter lagring."
         }
       },
       "manage_channels": {
@@ -107,6 +111,8 @@
           "labels": "Etiketter",
           "importance": "Viktighet",
           "persistent": "Vedvarende",
+          "repeat_minutes": "Gjenta hvert (minutter)",
+          "repeat_count": "Gjenta maks",
           "home_only": "Kun hjemme",
           "target_recipients": "Målmottakere",
           "remove": "Fjern dette planlagte varselet"
@@ -117,7 +123,9 @@
           "persistent": "Hvis sann, kreves bekreftelse via det innebygde vedvarende varslingssystemet, samme som send_notifications eget \"persistent\"-felt.",
           "home_only": "Lever kun til mottakere hvis tilknyttede personentitet for øyeblikket er hjemme.",
           "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere.",
-          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler)."
+          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler).",
+          "repeat_minutes": "Kun vedvarende: send på nytt hvert så mange minutter til det bekreftes. Tom = ingen gjentakelser.",
+          "repeat_count": "Maks antall gjentakelser. Tom = til det bekreftes."
         }
       },
       "manage_calendar": {
@@ -141,6 +149,8 @@
           "labels": "Etiketter",
           "importance": "Viktighet",
           "persistent": "Vedvarende",
+          "repeat_minutes": "Gjenta hvert (minutter)",
+          "repeat_count": "Gjenta maks",
           "home_only": "Kun hjemme",
           "target_recipients": "Målmottakere",
           "remove": "Fjern dette kalendervarselet"
@@ -153,7 +163,9 @@
           "persistent": "Hvis sann, kreves bekreftelse via det innebygde vedvarende varslingssystemet, samme som send_notifications eget \"persistent\"-felt.",
           "home_only": "Lever kun til mottakere hvis tilknyttede personentitet for øyeblikket er hjemme.",
           "target_recipients": "Begrens levering til disse mottakerne (etter navn), samme som send_notifications eget \"target_recipients\"-felt. Tom = vurder alle aktiverte mottakere.",
-          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler)."
+          "labels": "Etiketter som legges til (defineres per kanal under Administrer kanaler).",
+          "repeat_minutes": "Kun vedvarende: send på nytt hvert så mange minutter til det bekreftes. Tom = ingen gjentakelser.",
+          "repeat_count": "Maks antall gjentakelser. Tom = til det bekreftes."
         }
       },
       "manage_chatrooms": {
@@ -211,17 +223,242 @@
       "duplicate_key": "En kanal med denne nøkkelen finnes allerede.",
       "invalid_cron": "Ikke et gyldig cron-uttrykk.",
       "unknown": "Uventet feil ved lagring - sjekk Home Assistant-loggen for detaljer.",
-      "invalid_key": "Nøkkelen kan ikke være tom."
+      "invalid_key": "Nøkkelen kan ikke være tom.",
+      "unknown_notify_service": "Denne varslingstjenesten finnes ikke (ennå), så testvarselet kan ikke sendes."
     }
   },
   "issues": {
-    "deprecated_service": {
-      "title": "Utdatert tjeneste {old}",
-      "description": "{old} er utdatert etter navnebyttet til Sentinel. Bruk {new} i automasjoner og skript i stedet; den gamle tjenesten fjernes i en fremtidig versjon."
-    },
     "legacy_integration_folder": {
       "title": "Fjern den gamle K93 ANS-integrasjonsmappen",
       "description": "Sentinel har tatt over K93 ANS-konfigurasjonen. De gamle integrasjonsfilene ligger fortsatt i {path}. Slett mappen og start Home Assistant på nytt."
+    }
+  },
+  "selector": {
+    "importance": {
+      "options": {
+        "low": "Lav",
+        "normal": "Normal",
+        "high": "Høy",
+        "critical": "Kritisk"
+      }
+    },
+    "manage": {
+      "options": {
+        "__add_new__": "Legg til ny…"
+      }
+    },
+    "linked_user": {
+      "options": {
+        "__none__": "(ikke tilknyttet)"
+      }
+    },
+    "access_mode": {
+      "options": {
+        "all": "Alle brukere",
+        "selected": "Valgte brukere"
+      }
+    },
+    "language": {
+      "options": {
+        "auto": "Automatisk (følg Home Assistant)",
+        "en": "English",
+        "no": "Norsk"
+      }
+    }
+  },
+  "services": {
+    "send_notification": {
+      "name": "Send varsel",
+      "description": "Sender et varsel gjennom Sentinel til mottakerne og kanalene som matcher filtrene, eventuelt som et vedvarende varsel som krever bekreftelse. Returnerer varselets id når den kalles med en svarvariabel.",
+      "fields": {
+        "title": {
+          "name": "Tittel",
+          "description": "Varselets tittel."
+        },
+        "message": {
+          "name": "Melding",
+          "description": "Varselets meldingstekst."
+        },
+        "icon": {
+          "name": "Ikon",
+          "description": "Et mdi:-ikon som vises som varselets lille ikon. Er det ikke et mdi:-ikon (og \"bilde\" ikke er satt), brukes det som bilde i stedet."
+        },
+        "image": {
+          "name": "Bilde",
+          "description": "Et bilde som legges ved: en bilde-URL eller en HA-relativ sti som /local/... eller /api/camera_proxy/.... Vises i push-varsler, i vedvarende varsler og i kortet."
+        },
+        "image_entity": {
+          "name": "Bildeentitet",
+          "description": "En kamera- eller bildeentitet som tas øyeblikksbilde av i stedet for å oppgi \"bilde\". Ignoreres hvis \"bilde\" også er satt."
+        },
+        "channel": {
+          "name": "Kanal",
+          "description": "Kanalnøkkel, eller en liste med dem. Innebygde kanaler er info, alert, event, reminder, security, system og chat. Standard er \"default\"."
+        },
+        "labels": {
+          "name": "Etiketter",
+          "description": "Valgfri etikett, eller en liste med dem, for å sortere varselet videre innenfor kanalen. Etiketter defineres per kanal under Administrer kanaler."
+        },
+        "importance": {
+          "name": "Viktighet",
+          "description": "Viktighetsnivå."
+        },
+        "actions": {
+          "name": "Handlinger",
+          "description": "Liste med handlingsknapper, hver med nøklene \"action\" og \"title\"."
+        },
+        "persistent": {
+          "name": "Vedvarende",
+          "description": "Hvis sann, kreves bekreftelse via det innebygde systemet for vedvarende varsler."
+        },
+        "data": {
+          "name": "Data",
+          "description": "Ekstra felter som sendes videre til notify.*-mål."
+        },
+        "target_recipients": {
+          "name": "Målmottakere",
+          "description": "Begrens levering til disse mottakerne, etter navn eller id. Tom = alle mottakere vurderes."
+        },
+        "home_only": {
+          "name": "Kun hjemme",
+          "description": "Lever kun til mottakere hvis personentitet er hjemme. Mottakere uten person påvirkes ikke."
+        },
+        "live_id": {
+          "name": "Direkte-ID",
+          "description": "En stabil id du velger. Nye kall med samme live_id oppdaterer det samme varselet i stedet for å lage et nytt. Avslutt med end_live_notification."
+        },
+        "interactive_only": {
+          "name": "Kun interaktiv",
+          "description": "Hvis sann, fjernes direktevarselets push for mottakere hvis interaktiv-sensor har vært av lenger enn tidsavbruddet under Avansert."
+        },
+        "source": {
+          "name": "Kilde",
+          "description": "Fritekst som beskriver hva som utløste varselet."
+        },
+        "show_in_history": {
+          "name": "Vis i historikk",
+          "description": "Hvis usann, vises varselet ikke i kortets historikk, ticker eller statistikksensorer. Det leveres og kan bekreftes som vanlig."
+        },
+        "dismiss_on_action": {
+          "name": "Lukk ved handling",
+          "description": "Hvis sann, lukkes push-varselet når en annen handlingsknapp enn Bekreft trykkes. Standard holder det åpent."
+        },
+        "clear_on_acknowledge": {
+          "name": "Fjern ved bekreftelse",
+          "description": "Hvis sann (standard), fjernes push-varselet fra alle telefoner når varselet bekreftes et annet sted."
+        },
+        "repeat_minutes": {
+          "name": "Gjenta hvert (minutter)",
+          "description": "Send varselet på nytt hvert så mange minutter til det bekreftes. Kun for vedvarende varsler; stilletid gjelder fortsatt for hver gjentakelse."
+        },
+        "repeat_count": {
+          "name": "Gjenta maks",
+          "description": "Maks antall gjentakelser. Tom = gjenta til det bekreftes."
+        }
+      }
+    },
+    "acknowledge": {
+      "name": "Bekreft",
+      "description": "Markerer et varsel som bekreftet og fjerner det vedvarende varselet, om det finnes.",
+      "fields": {
+        "notification_id": {
+          "name": "Varsel-ID",
+          "description": "Id-en til varselet som skal bekreftes."
+        }
+      }
+    },
+    "end_live_notification": {
+      "name": "Avslutt direktevarsel",
+      "description": "Avslutter et direktevarsel startet med live_id: fjerner det vedvarende varselet og push-varselene, og markerer det som bekreftet.",
+      "fields": {
+        "live_id": {
+          "name": "Direkte-ID",
+          "description": "live_id-en som ble brukt i send_notification."
+        }
+      }
+    },
+    "delete_notification": {
+      "name": "Slett varsel",
+      "description": "Sletter ett varsel permanent fra historikken. Er det fortsatt utestående, fjernes også det vedvarende varselet og push-varselene.",
+      "fields": {
+        "notification_id": {
+          "name": "Varsel-ID",
+          "description": "Id-en til varselet som skal slettes."
+        }
+      }
+    },
+    "clear_history": {
+      "name": "Tøm historikk",
+      "description": "Sletter flere varsler fra historikken samtidig. Som standard beholdes varsler som fortsatt venter på bekreftelse.",
+      "fields": {
+        "include_unacknowledged": {
+          "name": "Inkluder ubekreftede",
+          "description": "Hvis sann, slettes også varsler som fortsatt venter på bekreftelse."
+        }
+      }
+    },
+    "restore_config_from_snapshot": {
+      "name": "Gjenopprett konfigurasjon fra sikkerhetskopi",
+      "description": "Erstatter HELE konfigurasjonen med innholdet i config.json, sikkerhetskopien Sentinel skriver ved hver lagring. Ment for gjenoppretting. Kun for administratorer.",
+      "fields": {
+        "confirm": {
+          "name": "Bekreft",
+          "description": "Må være sann for å faktisk gjenopprette - en sikring mot utilsiktede kall."
+        }
+      }
+    },
+    "send_chat_message": {
+      "name": "Send chatmelding",
+      "description": "Legger en melding i et chatterom, for automasjoner og skript. Med avsendernavn/ikon postes den som en system-identitet; ellers som brukeren som utløste kallet.",
+      "fields": {
+        "chatroom_id": {
+          "name": "Chatterom",
+          "description": "Chatterommet det skal postes i, etter id eller navn."
+        },
+        "message": {
+          "name": "Melding",
+          "description": "Meldingsteksten."
+        },
+        "sender_name": {
+          "name": "Avsendernavn",
+          "description": "Navn som vises som avsender. Standard er \"System\"."
+        },
+        "sender_icon": {
+          "name": "Avsenderikon",
+          "description": "Et mdi:-ikon for avsenderen. Standard er mdi:robot."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "channels": {
+        "name": "Konfigurerte kanaler"
+      },
+      "recipients": {
+        "name": "Konfigurerte mottakere"
+      },
+      "chatrooms": {
+        "name": "Konfigurerte chatterom"
+      },
+      "stored": {
+        "name": "Lagrede varsler"
+      },
+      "sent_today": {
+        "name": "Sendt i dag"
+      },
+      "sent_this_week": {
+        "name": "Sendt denne uken"
+      },
+      "sent_this_month": {
+        "name": "Sendt denne måneden"
+      },
+      "unacknowledged": {
+        "name": "Ubekreftede varsler"
+      },
+      "database_size": {
+        "name": "Databasestørrelse"
+      }
     }
   }
 }

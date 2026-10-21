@@ -13,11 +13,13 @@ from .const import (
     CHAT_CHANNEL,
     CONF_CHANNELS,
     CONF_RECIPIENTS,
+    SIGNAL_CHAT_DELETED,
     SIGNAL_CHAT_MESSAGE,
     SIGNAL_CHAT_REACTION,
     SIGNAL_CHAT_READ,
 )
 from .dispatch import async_acknowledge, async_send_notification
+from .images import async_delete_chat_images
 from .models import ChatMessage
 from .routing import channel_accepts, importance_rank
 from .runtime import SentinelData
@@ -147,6 +149,14 @@ async def async_mark_chatroom_read(
     record = runtime.store.async_get_by_live_id(chat_alert_live_id(chatroom_id, user_id))
     if record is not None:
         await async_acknowledge(hass, runtime, record["id"], "chat_read")
+
+
+async def async_delete_chat_message(
+    hass: HomeAssistant, runtime: SentinelData, chatroom_id: str, message_id: str
+) -> None:
+    await runtime.chat_store.async_delete_message(chatroom_id, message_id)
+    await async_delete_chat_images(hass, chatroom_id, [message_id])
+    async_dispatcher_send(hass, SIGNAL_CHAT_DELETED, {"chatroom_id": chatroom_id, "message_id": message_id})
 
 
 def group_reactions(raw: list[dict[str, str]]) -> list[dict[str, Any]]:

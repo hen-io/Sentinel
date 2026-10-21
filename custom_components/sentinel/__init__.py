@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import timedelta
+from functools import partial
 
 from homeassistant.const import Platform
 from homeassistant.core import Event, HomeAssistant
@@ -40,13 +41,15 @@ from .dispatch import (
     async_clear_inactive_live_recipients,
     async_end_live_notifications,
     async_register_persistent_notification_listener,
+    async_resend,
     async_restore_persistent_notifications,
 )
 from .images import async_delete_chat_images, async_prune_orphaned_images
 from .options import normalize_options
+from .reminders import ReminderManager
 from .runtime import SentinelConfigEntry, SentinelData
 from .scheduler import async_setup_scheduled_notifications
-from .services import SERVICES, async_register_service, async_register_services
+from .services import async_register_services
 from .store import NotificationStore
 from .ws import async_register_commands
 
@@ -105,6 +108,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> 
     await legacy.async_adopt_legacy_entries(hass, entry)  # legacy
     entry.runtime_data = runtime
     entry.async_on_unload(runtime.db.async_close)
+    runtime.reminders = ReminderManager(hass, runtime.store, partial(async_resend, hass, runtime))
+    runtime.reminders.async_resume()
+    entry.async_on_unload(runtime.reminders.async_shutdown)
     await _async_refresh_user_names(hass, runtime)
     await async_write_config_snapshot(hass, runtime.storage_dir, entry.options)
 
@@ -151,7 +157,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> 
     ):
         entry.async_on_unload(unsub)
 
-    legacy.async_register_legacy_services(hass, SERVICES, async_register_service)  # legacy
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     hass.async_create_task(legacy.async_check_legacy_folder(hass))  # legacy
 
@@ -160,7 +165,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> 
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SentinelConfigEntry) -> bool:
-    legacy.async_unregister_legacy_services(hass, SERVICES)  # legacy
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .chat_dispatch import (
+    async_delete_chat_message,
     async_mark_chatroom_read,
     async_post_chat_message,
     async_toggle_reaction,
@@ -23,6 +24,7 @@ from .const import (
     CONF_CHAT_REACTION_EMOJI,
     CONF_CHATROOMS,
     DEFAULT_CHAT_REACTION_EMOJI,
+    SIGNAL_CHAT_DELETED,
     SIGNAL_CHAT_MESSAGE,
     SIGNAL_CHAT_REACTION,
     SIGNAL_CHAT_READ,
@@ -128,7 +130,13 @@ def _subscribe(hass: HomeAssistant, connection: Connection, msg: dict, runtime: 
         if payload["chatroom_id"] == chatroom_id:
             _send({"reaction": {"message_id": payload["message_id"], "reactions": payload["reactions"]}})
 
+    @callback
+    def forward_deleted(payload: dict) -> None:
+        if payload["chatroom_id"] == chatroom_id:
+            _send({"deleted": {"message_id": payload["message_id"]}})
+
     unsubs = [
+        async_dispatcher_connect(hass, SIGNAL_CHAT_DELETED, forward_deleted),
         async_dispatcher_connect(hass, SIGNAL_CHAT_MESSAGE, forward_message),
         async_dispatcher_connect(hass, SIGNAL_CHAT_READ, forward_read),
         async_dispatcher_connect(hass, SIGNAL_CHAT_REACTION, forward_reaction),
@@ -212,3 +220,20 @@ async def _toggle_reaction(hass: HomeAssistant, connection: Connection, msg: dic
         hass, runtime, msg["chatroom_id"], msg["message_id"], connection.user.id, msg["emoji"]
     )
     connection.send_result(msg["id"], {"reactions": reactions})
+
+
+@ws_command("chat/delete_message", {vol.Required("chatroom_id"): str, vol.Required("message_id"): str})
+async def _delete_message(hass: HomeAssistant, connection: Connection, msg: dict, runtime: SentinelData) -> None:
+    """Senders can delete their own messages; admins can delete any."""
+    if _find_room(runtime, msg["chatroom_id"], connection.user.id) is None:
+        _deny(connection, msg)
+        return
+    message = runtime.chat_store.async_get_message(msg["chatroom_id"], msg["message_id"])
+    if message is None:
+        connection.send_error(msg["id"], "not_found", "No such message in this chatroom")
+        return
+    if message.get("sender_user_id") != connection.user.id and not connection.user.is_admin:
+        connection.send_error(msg["id"], "unauthorized", "You can only delete your own messages")
+        return
+    await async_delete_chat_message(hass, runtime, msg["chatroom_id"], msg["message_id"])
+    connection.send_result(msg["id"])

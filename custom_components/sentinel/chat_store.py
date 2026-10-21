@@ -80,6 +80,16 @@ class ChatStore:
                 messages = [m for m in messages if m["created"] < cursor["created"]]
         return messages[:limit] if limit is not None else messages
 
+    def async_get_message(self, chatroom_id: str, message_id: str) -> ChatMessage | None:
+        return next((m for m in self._messages.get(chatroom_id, []) if m["id"] == message_id), None)
+
+    async def async_delete_message(self, chatroom_id: str, message_id: str) -> None:
+        messages = self._messages.get(chatroom_id, [])
+        self._messages[chatroom_id] = [m for m in messages if m["id"] != message_id]
+        self._reactions.pop(message_id, None)
+        await self._db.async_execute("DELETE FROM chat_messages WHERE id = ?", (message_id,))
+        await self._db.async_execute("DELETE FROM chat_reactions WHERE message_id = ?", (message_id,))
+
     def async_latest_message(self, chatroom_id: str) -> ChatMessage | None:
         messages = self._messages.get(chatroom_id, [])
         return messages[0] if messages else None

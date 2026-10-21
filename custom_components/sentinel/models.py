@@ -43,6 +43,9 @@ class NotificationRecord(TypedDict):
     show_in_history: bool
     dismiss_on_action: bool
     clear_on_acknowledge: bool
+    repeat_minutes: int | None
+    repeat_count: int | None
+    repeats_sent: int
 
 
 class Recipient(TypedDict):
